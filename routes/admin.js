@@ -107,6 +107,14 @@ router.put('/seasons/:id', requireAuth, (req, res) => {
   res.json(db.prepare('SELECT * FROM seasons WHERE id = ?').get(season.id));
 });
 
+router.delete('/seasons/:id', requireAuth, (req, res) => {
+  const db = getDb();
+  const season = db.prepare('SELECT * FROM seasons WHERE id = ?').get(req.params.id);
+  if (!season) return res.status(404).json({ error: 'Season not found' });
+  db.prepare('DELETE FROM seasons WHERE id = ?').run(req.params.id);
+  res.json({ success: true });
+});
+
 // GET /api/admin/recent-matches
 router.get('/recent-matches', requireAuth, (req, res) => {
   const db = getDb();

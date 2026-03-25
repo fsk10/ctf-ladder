@@ -10,10 +10,10 @@
 <nav>
   <span class="brand">Sunday Ladder</span>
   <a href="/admin/dashboard">Dashboard</a>
-  <a href="/admin/import">Import</a>
-  <a href="/admin/weeks">Weeks</a>
   <a href="/admin/seasons">Seasons</a>
+  <a href="/admin/weeks">Weeks</a>
   <a href="/admin/players">Players</a>
+  <a href="/admin/import">Import</a>
   <a href="/admin/settings">Settings</a>
   <a href="/admin/security">Security</a>
   <span class="nav-right">
@@ -56,6 +56,7 @@ async function loadList() {
         ${s.status === 'active'
           ? `<button class="btn btn-danger btn-sm" onclick="finishSeason(${s.id})">Finish season</button>`
           : `<button class="btn btn-outline btn-sm" onclick="reactivateSeason(${s.id})">Re-activate</button>`}
+        <button class="btn btn-danger btn-sm" onclick="deleteSeason(${s.id}, '${s.name.replace(/'/g, "\\'")}')">Delete</button>
       </td>
     </tr>`).join('');
   document.getElementById('list').innerHTML = `
@@ -102,6 +103,12 @@ async function reactivateSeason(id) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status: 'active' })
   });
+  if (res.ok) loadList();
+}
+
+async function deleteSeason(id, name) {
+  if (!confirm(`Delete "${name}" and ALL its weeks, matches and stats?\n\nThis cannot be undone.`)) return;
+  const res = await fetch(`/api/admin/seasons/${id}`, { method: 'DELETE' });
   if (res.ok) loadList();
 }
 
