@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Player — Sunday Ladder</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<nav>
+  <span class="brand">Sunday Ladder</span>
+  <a href="/">Standings</a>
+  <a href="/history">History</a>
+  <span class="nav-right"><a href="/admin">Admin</a></span>
+</nav>
+<div class="content">
+  <div id="app"><p class="loading">Loading…</p></div>
+</div>
+<script>
+const fmt = (n, d=2) => (typeof n === 'number' && isFinite(n)) ? n.toFixed(d) : '—';
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+const id = window.location.pathname.split('/').pop();
+
+async function load() {
+  const res = await fetch(`/api/player/${id}`);
+  if (!res.ok) { document.getElementById('app').innerHTML = '<p class="alert alert-error">Player not found.</p>'; return; }
+  const { player, aliases, seasonSummaries, weeklyHistory, matchHistory } = await res.json();
+
+  document.title = `${player.display_name} — Sunday Ladder`;
+
+  const aliasTags = aliases.map(a => `<span class="alias-tag">${esc(a.alias)}</span>`).join('');
+
+  // Season summaries
+  const seasonRows = seasonSummaries.map(s => `
+    <tr>
+      <td>${esc(s.season_name)} ${s.status==='active'?'<span class="badge badge-green">Active</span>':''}</td>
+      <td class="num"><strong>#${s.rank}</strong></td>
+      <td class="num">${s.total_pugs}</td>
+      <td class="num">${fmt(s.total_points)}</td>
+      <td class="num">${fmt(s.avg_points_per_pug)}</td>
+      <td class="num">${fmt(s.participation_bonus)}</td>
+      <td class="num"><strong>${fmt(s.score)}</strong></td>
+    </tr>`).join('');
+
+  // Weekly history
+  const weekRows = weeklyHistory.map(w => `
+    <tr>
+      <td><a href="/week/${w.week_id}">Week ${w.week_number}</a></td>
+      <td>${esc(w.season_name)}</td>
+      <td>${w.week_date || '—'}</td>
+      <td class="num">${w.pugs_played}</td>
+      <td class="num">${fmt(w.total_points)}</td>
+      <td class="num">${fmt(w.avg_points_per_pug)}</td>
+      <td class="num">${fmt(w.participation_bonus)}</td>
+      <td class="num"><strong>${fmt(w.score)}</strong></td>
+    </tr>`).join('');
+
+  // Match history
+  const matchRows = matchHistory.map(m => {
+    const teamBadge = m.team === 'Red'
+      ? '<span class="badge badge-red">Red</span>'
+      : '<span class="badge badge-blue">Blue</span>';
+    const result = (() => {
+      if (m.red_score === m.blue_score) return '<span class="badge badge-gray">Draw</span>';
+      const won = (m.team==='Red' && m.red_score > m.blue_score) || (m.team==='Blue' && m.blue_score > m.red_score);
+      return won ? '<span class="badge badge-green">Win</span>' : '<span class="badge badge-orange">Loss</span>';
+    })();
+    return `
+    <tr>
+      <td><a href="/match/${m.match_id}">${esc(m.map || 'Unknown map')}</a></td>
+      <td>Week ${m.week_number} — ${esc(m.season_name)}</td>
+      <td>${m.match_date || '—'}</td>
+      <td>${teamBadge} ${result}</td>
+      <td class="num">${m.red_score} : ${m.blue_score}</td>
+      <td class="num">${m.flag_capture} / ${m.flag_return} / ${m.flag_kill} / ${m.flag_cover} / ${m.flag_seal} / ${m.flag_assist}</td>
+      <td class="num"><strong>${fmt(m.total_points)}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('app').innerHTML = `
+    <p class="text-muted mb-1">
+      <button class="btn btn-outline btn-sm" onclick="history.back()">← Back</button>
+      <a href="/">Standings</a>
+    </p>
+    <h1>${esc(player.display_name)}</h1>
+
+    ${aliases.length > 0 ? `
+    <div class="card mb-2">
+      <h3>Known aliases</h3>
+      <div class="alias-list mt-1">${aliasTags}</div>
+    </div>` : ''}
+
+    <h2>Season Summary</h2>
+    ${seasonSummaries.length === 0 ? '<p class="text-muted">No matches played yet.</p>' : `
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Season</th><th class="num">Rank</th><th class="num">Pugs</th><th class="num">Total Pts</th>
+          <th class="num">Avg Pts/Pug</th><th class="num">Part. Bonus</th><th class="num">Final Score</th>
+        </tr></thead>
+        <tbody>${seasonRows}</tbody>
+      </table>
+    </div>`}
+
+    <h2>Weekly History</h2>
+    ${weeklyHistory.length === 0 ? '<p class="text-muted">No data.</p>' : `
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Week</th><th>Season</th><th>Date</th><th class="num">Pugs</th>
+          <th class="num">Total Pts</th><th class="num">Avg Pts/Pug</th>
+          <th class="num">Part. Bonus</th><th class="num">Weekly Score</th>
+        </tr></thead>
+        <tbody>${weekRows}</tbody>
+      </table>
+    </div>`}
+
+    <h2>Match History</h2>
+    ${matchHistory.length === 0 ? '<p class="text-muted">No matches.</p>' : `
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Map</th><th>Week / Season</th><th>Date</th><th>Team / Result</th>
+          <th class="num">Score</th>
+          <th class="num" title="Cap / Ret / Kill / Cov / Seal / Ast">Cap/Ret/Kill/Cov/Seal/Ast</th>
+          <th class="num">Points</th>
+        </tr></thead>
+        <tbody>${matchRows}</tbody>
+      </table>
+    </div>`}
+  `;
+}
+
+load();
+</script>
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin Dashboard — Sunday Ladder</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<nav>
+  <span class="brand">Sunday Ladder</span>
+  <a href="/admin/dashboard">Dashboard</a>
+  <a href="/admin/import">Import</a>
+  <a href="/admin/weeks">Weeks</a>
+  <a href="/admin/seasons">Seasons</a>
+  <a href="/admin/players">Players</a>
+  <a href="/admin/settings">Settings</a>
+  <a href="/admin/security">Security</a>
+  <span class="nav-right">
+    <a href="/">Public</a>
+    <a href="#" onclick="logout()">Logout</a>
+  </span>
+</nav>
+<div class="content">
+  <h1>Admin Dashboard</h1>
+  <div id="status"><p class="loading">Loading…</p></div>
+</div>
+<script src="/admin/common.js"></script>
+<script>
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+async function load() {
+  await checkAuth();
+  const [seasons, recent, standingsData] = await Promise.all([
+    (await fetch('/api/admin/seasons')).json(),
+    (await fetch('/api/admin/recent-matches')).json(),
+    (await fetch('/api/standings')).json()
+  ]);
+  const active = seasons.find(s => s.status === 'active');
+  const top3   = (standingsData.standings || []).slice(0, 3);
+  const lastMatch = recent[0] ?? null;
+
+  const medalColors = ['#f9a825','#90a4ae','#a1887f'];
+  const top3HTML = top3.length === 0 ? '<p class="text-muted" style="font-size:.85rem;margin-top:.5rem">No standings yet.</p>' : `
+    <div style="margin-top:.75rem;display:flex;flex-direction:column;gap:.35rem">
+      ${top3.map((p, i) => `
+        <div style="display:flex;align-items:center;gap:.6rem;font-size:.88rem">
+          <span style="font-weight:700;color:${medalColors[i]};width:1.1rem;text-align:center">${i+1}</span>
+          <a href="/player/${p.player_id}" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.display_name)}</a>
+          <span style="color:#555;font-variant-numeric:tabular-nums">${p.score.toFixed(2)}</span>
+        </div>`).join('')}
+    </div>`;
+
+  const latestWeekHTML = lastMatch
+    ? `<p style="font-size:.83rem;color:#666;margin-top:1.2rem">Latest: <strong>Week ${lastMatch.week_number}</strong> &mdash; ${lastMatch.imported_at ? lastMatch.imported_at.slice(0,10) : '—'}</p>`
+    : '';
+
+  const recentRows = recent.length === 0
+    ? '<p class="text-muted mt-1">No matches imported yet.</p>'
+    : recent.map(m => `
+        <tr>
+          <td><a href="/match/${m.id}">${esc(m.map || 'Unknown map')}</a></td>
+          <td><a href="/admin/weeks?week_id=${m.week_id}">${esc(m.season_name)} — Week ${m.week_number}</a></td>
+          <td class="num"><span class="team-red">${m.red_score}</span> : <span class="team-blue">${m.blue_score}</span></td>
+          <td class="text-muted" style="font-size:.8rem">${m.imported_at ? m.imported_at.replace('T',' ').slice(0,16) : '—'}</td>
+        </tr>`).join('');
+
+  document.getElementById('status').innerHTML = `
+    <div class="grid-2">
+      <div class="card">
+        <h3>Active Season</h3>
+        ${active ? `
+          <p style="margin-top:.5rem;margin-bottom:1rem"><strong>${esc(active.name)}</strong></p>
+          <div style="display:flex;gap:1.5rem;flex-wrap:wrap">
+            <div style="text-align:center">
+              <div style="font-size:2rem;font-weight:700;line-height:1">${active.week_count}</div>
+              <div class="text-muted" style="font-size:.8rem;margin-top:.25rem">Weeks</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:2rem;font-weight:700;line-height:1">${active.match_count}</div>
+              <div class="text-muted" style="font-size:.8rem;margin-top:.25rem">Matches</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:2rem;font-weight:700;line-height:1">${active.player_count}</div>
+              <div class="text-muted" style="font-size:.8rem;margin-top:.25rem">Players</div>
+            </div>
+          </div>
+          ${latestWeekHTML}
+          <hr style="border:none;border-top:1px solid #e0e0e0;margin:1.2rem 0">
+          <div style="font-size:.8rem;color:#888;text-transform:uppercase;letter-spacing:.04em;margin-bottom:.1rem">Standings top 3</div>
+          ${top3HTML}
+          <div style="margin-top:1rem">
+            <a href="/admin/import${lastMatch ? '?week_id='+lastMatch.week_id : ''}" class="btn btn-primary btn-sm">Import match</a>
+            <a href="/admin/weeks" class="btn btn-outline btn-sm">Manage weeks</a>
+            <a href="/" class="btn btn-outline btn-sm">View standings</a>
+          </div>`
+          : '<p class="text-muted mt-1">No active season. <a href="/admin/seasons">Create one →</a></p>'}
+      </div>
+      <div class="card">
+        <h3>Recently imported</h3>
+        ${recent.length === 0
+          ? '<p class="text-muted mt-1">No matches imported yet.</p>'
+          : `<div class="table-wrap" style="margin-top:.75rem;margin-bottom:0">
+               <table>
+                 <thead><tr><th>Map</th><th>Season / Week</th><th class="num">Score</th><th>Imported</th></tr></thead>
+                 <tbody>${recentRows}</tbody>
+               </table>
+             </div>`}
+      </div>
+    </div>
+    <h2>All Seasons</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Name</th><th>Status</th><th class="num">Weeks</th><th class="num">Matches</th><th>Created</th></tr></thead>
+        <tbody>
+          ${seasons.map(s => `
+            <tr>
+              <td>${esc(s.name)}</td>
+              <td>${s.status === 'active' ? '<span class="badge badge-green">Active</span>' : '<span class="badge badge-gray">Finished</span>'}</td>
+              <td class="num">${s.week_count}</td>
+              <td class="num">${s.match_count}</td>
+              <td>${s.created_at.split('T')[0]}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+load();
+</script>
+</body>
+</html>

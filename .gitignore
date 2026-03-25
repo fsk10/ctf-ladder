@@ -1,0 +1,7 @@
+node_modules/
+db/*.db
+db/*.db-shm
+db/*.db-wal
+ecosystem.config.js
+.env
+_dev/

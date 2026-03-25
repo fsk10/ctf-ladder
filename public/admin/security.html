@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Security — Admin</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<nav>
+  <span class="brand">Sunday Ladder</span>
+  <a href="/admin/dashboard">Dashboard</a>
+  <a href="/admin/import">Import</a>
+  <a href="/admin/weeks">Weeks</a>
+  <a href="/admin/seasons">Seasons</a>
+  <a href="/admin/players">Players</a>
+  <a href="/admin/settings">Settings</a>
+  <a href="/admin/security">Security</a>
+  <span class="nav-right">
+    <a href="/">Public</a>
+    <a href="#" onclick="logout()">Logout</a>
+  </span>
+</nav>
+<div class="content">
+  <h1>Security</h1>
+  <div id="msg"></div>
+
+  <div class="card mb-2" id="suspiciousCard">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h3>Suspicious IPs <span class="text-muted" style="font-size:.8rem;font-weight:400">(3+ failed logins in last 7 days)</span></h3>
+      <button class="btn btn-secondary btn-sm" onclick="clearOldLogs()">Clear logs older than 30 days</button>
+    </div>
+    <div id="suspiciousList" class="mt-1"><p class="loading">Loading…</p></div>
+  </div>
+
+  <div class="card mb-2">
+    <h3>Recent failed login attempts <span class="text-muted" style="font-size:.8rem;font-weight:400">(last 100)</span></h3>
+    <div id="recentList" class="mt-1"><p class="loading">Loading…</p></div>
+  </div>
+</div>
+<script src="/admin/common.js"></script>
+<script>
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+async function load() {
+  const data = await (await fetch('/api/admin/login-attempts')).json();
+
+  // Suspicious IPs
+  if (!data.suspicious.length) {
+    document.getElementById('suspiciousList').innerHTML = '<p class="text-muted">No suspicious activity.</p>';
+  } else {
+    const rows = data.suspicious.map(r => `
+      <tr>
+        <td><code>${esc(r.ip)}</code></td>
+        <td class="num"><strong style="color:#c62828">${r.failed_attempts}</strong></td>
+        <td>${r.first_attempt.replace('T',' ')}</td>
+        <td>${r.last_attempt.replace('T',' ')}</td>
+      </tr>`).join('');
+    document.getElementById('suspiciousList').innerHTML = `
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>IP Address</th><th class="num">Failed attempts</th><th>First seen</th><th>Last attempt</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }
+
+  // Recent failed attempts
+  if (!data.recent.length) {
+    document.getElementById('recentList').innerHTML = '<p class="text-muted">No failed attempts on record.</p>';
+  } else {
+    const rows = data.recent.map(r => `
+      <tr>
+        <td>${r.attempted_at.replace('T',' ')}</td>
+        <td><code>${esc(r.ip)}</code></td>
+      </tr>`).join('');
+    document.getElementById('recentList').innerHTML = `
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Time (UTC)</th><th>IP Address</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }
+}
+
+async function clearOldLogs() {
+  const res  = await fetch('/api/admin/login-attempts', { method: 'DELETE' });
+  const data = await res.json();
+  document.getElementById('msg').innerHTML =
+    `<div class="alert alert-success mb-2">Deleted ${data.deleted} old log entries.</div>`;
+  load();
+}
+
+checkAuth().then(load);
+</script>
+</body>
+</html>

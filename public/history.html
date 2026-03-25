@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Season History — Sunday Ladder</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .winner-card {
+      background: #1a1a2e;
+      color: #fff;
+      border-radius: 8px;
+      padding: 1.5rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+    }
+    .winner-trophy { font-size: 3rem; line-height: 1; }
+    .winner-info { flex: 1; }
+    .winner-label { font-size: .8rem; color: #90caf9; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+    .winner-name { font-size: 2rem; font-weight: 800; margin: .2rem 0; }
+    .winner-name a { color: #fff; }
+    .winner-name a:hover { color: #90caf9; text-decoration: none; }
+    .winner-score { font-size: 1rem; color: #aaa; }
+    .winner-score strong { color: #fff; font-size: 1.3rem; }
+    .podium-row { display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    .podium-card {
+      background: #fff;
+      border-radius: 6px;
+      padding: .75rem 1.1rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      min-width: 160px;
+      flex: 1;
+    }
+    .podium-card .place { font-size: .75rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #888; margin-bottom: .25rem; }
+    .podium-card .name  { font-size: .95rem; font-weight: 700; color: #1a1a2e; }
+    .podium-card .score { font-size: .85rem; color: #555; margin-top: .1rem; }
+    .season-select-bar { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    .season-select-bar label { font-weight: 600; color: #555; font-size: .9rem; }
+    .season-select-bar select { width: auto; }
+    thead th[onclick] { cursor: pointer; user-select: none; }
+    thead th[onclick]:hover { background: #2a2a4e; }
+  </style>
+</head>
+<body>
+<nav>
+  <span class="brand">Sunday Ladder</span>
+  <a href="/">Standings</a>
+  <a href="/history" class="active">History</a>
+  <span class="nav-right"><a href="/admin">Admin</a></span>
+</nav>
+<div class="content">
+  <h1>Season History</h1>
+  <div id="app"><p class="loading">Loading…</p></div>
+</div>
+<script>
+const fmt = (n, d=2) => (typeof n === 'number' && isFinite(n)) ? n.toFixed(d) : '—';
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+let allHistory = [];
+let currentStandings = [];
+let currentMinMatches = 0;
+let viewMode = localStorage.getItem('standingsView') === 'raw' ? 'raw' : 'points';
+let sortState = { col: 'score', dir: -1 };
+
+function applyViewClass() {
+  document.body.classList.toggle('full-stats', viewMode === 'raw');
+}
+applyViewClass();
+
+function sortedData(data) {
+  if (!sortState.col) return data;
+  return [...data].sort((a, b) => {
+    const av = a[sortState.col], bv = b[sortState.col];
+    if (typeof av === 'string') return sortState.dir * av.localeCompare(bv);
+    return sortState.dir * ((av ?? -Infinity) - (bv ?? -Infinity));
+  });
+}
+
+function sortBy(col) {
+  if (sortState.col === col) sortState.dir *= -1;
+  else { sortState.col = col; sortState.dir = col === 'display_name' ? 1 : -1; }
+  const container = document.getElementById('standingsContainer');
+  if (container) container.innerHTML = standingsTableHTML(currentStandings);
+}
+
+function setView(mode) {
+  viewMode = mode;
+  localStorage.setItem('standingsView', mode);
+  applyViewClass();
+  sortState = mode === 'points' ? { col: 'score', dir: -1 } : { col: 'total_caps', dir: -1 };
+  const toggle = document.getElementById('viewToggle');
+  if (toggle) toggle.outerHTML = viewToggleHTML();
+  const container = document.getElementById('standingsContainer');
+  if (container) container.innerHTML = standingsTableHTML(currentStandings);
+}
+
+function th(label, col, leftAlign = false, tooltip = '') {
+  const isActive = sortState.col === col;
+  const arrow = isActive ? (sortState.dir === -1 ? ' ▼' : ' ▲') : '';
+  const cls = leftAlign ? '' : ' class="num"';
+  const titleAttr = tooltip ? ` title="${tooltip}"` : '';
+  return `<th${cls}${titleAttr} onclick="sortBy('${col}')">${label}${arrow}</th>`;
+}
+
+function viewToggleHTML() {
+  return `<div id="viewToggle" style="display:flex;gap:.4rem">
+    <button class="btn btn-sm ${viewMode==='points'?'btn-primary':'btn-outline'}" onclick="setView('points')">Points</button>
+    <button class="btn btn-sm ${viewMode==='raw'?'btn-primary':'btn-outline'}" onclick="setView('raw')">CTF Stats</button>
+  </div>`;
+}
+
+function tableHeaders() {
+  if (viewMode === 'points') {
+    return `<th class="num">#</th>
+      ${th('Player', 'display_name', true)}
+      ${th('Pugs', 'total_pugs', false, 'Pugs played')}
+      ${th('Total Pts', 'total_points', false, 'Total points earned')}
+      ${th('Avg Pts/Pug', 'avg_points_per_pug', false, 'Average points per pug')}
+      ${th('Part. Bonus', 'participation_bonus', false, 'Participation bonus (2.5 × √pugs)')}
+      ${th('Final Score', 'score', false, 'Final score = (total pts / pugs) + participation bonus')}`;
+  } else {
+    return `<th class="num">#</th>
+      ${th('Player', 'display_name', true)}
+      ${th('Pugs', 'total_pugs', false, 'Pugs played')}
+      ${th('D', 'draws', false, 'Draws')}
+      ${th('W', 'wins', false, 'Wins')}
+      ${th('W3', 'wins_by3', false, 'Wins by 3+ caps')}
+      ${th('W5', 'wins_by5', false, 'Wins by 5+ caps')}
+      ${th('L5', 'losses_by5', false, 'Losses by 5+ caps')}
+      ${th('Cap', 'total_caps', false, 'Flag captures')}
+      ${th('Ast', 'total_assists', false, 'Flag assists')}
+      ${th('Cov', 'total_covers', false, 'Flag covers')}
+      ${th('Kill', 'total_kills', false, 'Flag kills')}
+      ${th('Ret', 'total_returns', false, 'Flag returns')}
+      ${th('Seal', 'total_seals', false, 'Flag seals')}
+      ${th('CS', 'clean_sheets', false, 'Clean sheets (opponent capped 0)')}`;
+  }
+}
+
+function tableRow(p, rank, provisional = false) {
+  const cls = provisional ? ' class="provisional-row"' : '';
+  const medal = !provisional && rank === 1 ? ' 🏆' : !provisional && rank === 2 ? ' 🥈' : !provisional && rank === 3 ? ' 🥉' : '';
+  const rankCell = provisional ? '—' : rank;
+  if (viewMode === 'points') {
+    return `<tr${cls}>
+      <td class="rank">${rankCell}</td>
+      <td><a href="/player/${p.player_id}">${esc(p.display_name)}</a>${medal}</td>
+      <td class="num">${p.total_pugs}</td>
+      <td class="num">${fmt(p.total_points)}</td>
+      <td class="num">${fmt(p.avg_points_per_pug)}</td>
+      <td class="num">${fmt(p.participation_bonus)}</td>
+      <td class="num"><strong>${fmt(p.score)}</strong></td>
+    </tr>`;
+  } else {
+    return `<tr${cls}>
+      <td class="rank">${rankCell}</td>
+      <td><a href="/player/${p.player_id}">${esc(p.display_name)}</a>${medal}</td>
+      <td class="num">${p.total_pugs}</td>
+      <td class="num">${p.draws}</td>
+      <td class="num">${p.wins}</td>
+      <td class="num">${p.wins_by3}</td>
+      <td class="num">${p.wins_by5}</td>
+      <td class="num">${p.losses_by5}</td>
+      <td class="num">${p.total_caps}</td>
+      <td class="num">${p.total_assists}</td>
+      <td class="num">${p.total_covers}</td>
+      <td class="num">${p.total_kills}</td>
+      <td class="num">${p.total_returns}</td>
+      <td class="num">${p.total_seals}</td>
+      <td class="num">${p.clean_sheets}</td>
+    </tr>`;
+  }
+}
+
+function provisionalDivider() {
+  const colCount = viewMode === 'points' ? 7 : 15;
+  return `<tr class="provisional-divider"><td colspan="${colCount}"></td></tr>`;
+}
+
+function standingsTableHTML(standings) {
+  if (!standings.length) return '<p class="text-muted">No data.</p>';
+  const sorted = sortedData(standings);
+  const threshold = Math.round(currentMinMatches);
+  if (threshold > 1) {
+    const qualified   = sorted.filter(p => p.total_pugs >= threshold);
+    const provisional = sorted.filter(p => p.total_pugs < threshold);
+    const qualRows  = qualified.map((p, i) => tableRow(p, i + 1)).join('');
+    const provRows  = provisional.map(p => tableRow(p, '—', true)).join('');
+    const divider   = provisional.length ? provisionalDivider() : '';
+    return `<div class="table-wrap"><table>
+      <thead><tr>${tableHeaders()}</tr></thead>
+      <tbody>${qualRows}${divider}${provRows}</tbody>
+    </table></div>`;
+  }
+  const rows = sorted.map((p, i) => tableRow(p, i + 1)).join('');
+  return `<div class="table-wrap"><table>
+    <thead><tr>${tableHeaders()}</tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+async function load() {
+  allHistory = await (await fetch('/api/season-history')).json();
+
+  if (!allHistory.length) {
+    document.getElementById('app').innerHTML = '<p class="text-muted">No finished seasons yet.</p>';
+    return;
+  }
+
+  const hashId = window.location.hash ? parseInt(window.location.hash.slice(1)) : null;
+  const initial = (hashId && allHistory.find(s => s.id === hashId)) || allHistory[0];
+
+  document.getElementById('app').innerHTML = `
+    <div id="seasonBar"></div>
+    <div id="seasonContent"></div>`;
+
+  renderSelector(initial.id);
+  await renderSeason(initial);
+}
+
+function renderSelector(selectedId) {
+  const opts = allHistory.map(s =>
+    `<option value="${s.id}" ${s.id === selectedId ? 'selected' : ''}>${esc(s.name)}</option>`
+  ).join('');
+  document.getElementById('seasonBar').innerHTML = `
+    <div class="season-select-bar">
+      <label>Season:</label>
+      <select onchange="onSeasonChange(this.value)">${opts}</select>
+    </div>`;
+}
+
+async function onSeasonChange(id) {
+  window.location.hash = id;
+  const season = allHistory.find(s => s.id == id);
+  if (!season._standings) {
+    const { standings, min_matches } = await (await fetch(`/api/standings?season_id=${id}`)).json();
+    season._standings  = standings;
+    season._minMatches = min_matches || 0;
+  }
+  renderSeasonContent(season);
+}
+
+async function renderSeason(season) {
+  if (!season._standings) {
+    const { standings, min_matches } = await (await fetch(`/api/standings?season_id=${season.id}`)).json();
+    season._standings  = standings;
+    season._minMatches = min_matches || 0;
+  }
+  renderSeasonContent(season);
+}
+
+function renderSeasonContent(season) {
+  const standings = season._standings || [];
+  currentStandings  = standings;
+  currentMinMatches = season._minMatches || 0;
+
+  const winner = standings[0];
+  const second = standings[1];
+  const third  = standings[2];
+
+  const winnerHTML = winner ? `
+    <div class="winner-card">
+      <div class="winner-trophy">🏆</div>
+      <div class="winner-info">
+        <div class="winner-label">Season Winner</div>
+        <div class="winner-name"><a href="/player/${winner.player_id}">${esc(winner.display_name)}</a></div>
+        <div class="winner-score">Final Score: <strong>${fmt(winner.score)}</strong> &nbsp;·&nbsp; ${winner.total_pugs} pugs &nbsp;·&nbsp; ${fmt(winner.total_points)} pts</div>
+      </div>
+    </div>` : '';
+
+  const placeName = ['🥇 Winner', '🥈 Runner-up', '🥉 Third place'];
+  const podiumCards = [winner, second, third].filter(Boolean).map((p, i) => `
+    <div class="podium-card">
+      <div class="place">${placeName[i]}</div>
+      <div class="name"><a href="/player/${p.player_id}">${esc(p.display_name)}</a></div>
+      <div class="score">${fmt(p.score)} &nbsp;·&nbsp; ${p.total_pugs} pugs</div>
+    </div>`).join('');
+
+  document.getElementById('seasonContent').innerHTML = `
+    ${winnerHTML}
+    ${standings.length > 1 ? `<div class="podium-row">${podiumCards}</div>` : ''}
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+      <h2 style="margin:0">Final Standings</h2>
+      ${viewToggleHTML()}
+    </div>
+    <div id="standingsContainer">${standingsTableHTML(standings)}</div>`;
+}
+
+load();
+</script>
+</body>
+</html>

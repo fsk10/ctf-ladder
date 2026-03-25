@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Weeks — Admin</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<nav>
+  <span class="brand">Sunday Ladder</span>
+  <a href="/admin/dashboard">Dashboard</a>
+  <a href="/admin/import">Import</a>
+  <a href="/admin/weeks">Weeks</a>
+  <a href="/admin/seasons">Seasons</a>
+  <a href="/admin/players">Players</a>
+  <a href="/admin/settings">Settings</a>
+  <a href="/admin/security">Security</a>
+  <span class="nav-right">
+    <a href="/">Public</a>
+    <a href="#" onclick="logout()">Logout</a>
+  </span>
+</nav>
+<div class="content">
+  <h1>Weeks</h1>
+
+  <div class="card mb-2">
+    <h3>Create New Week</h3>
+    <div id="createMsg"></div>
+    <div class="form-row mt-1">
+      <div class="form-group">
+        <label>Season</label>
+        <select id="seasonSel"></select>
+      </div>
+      <div class="form-group">
+        <label>Week number</label>
+        <input type="number" id="weekNum" min="1" style="width:100px">
+      </div>
+      <div class="form-group">
+        <label>Date (optional)</label>
+        <input type="date" id="weekDate">
+      </div>
+      <div class="form-group" style="flex:0">
+        <label>&nbsp;</label>
+        <button class="btn btn-success" onclick="createWeek()">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="season-bar">
+    <label>Filter by season:</label>
+    <select id="filterSeason" onchange="onSeasonFilterChange()">
+      <option value="">All seasons</option>
+    </select>
+    <label>Week:</label>
+    <select id="filterWeek" onchange="loadList()">
+      <option value="">All weeks</option>
+    </select>
+  </div>
+
+  <div id="list"><p class="loading">Loading…</p></div>
+</div>
+<script src="/admin/common.js"></script>
+<script>
+let seasons = [];
+
+async function loadSeasons() {
+  seasons = await (await fetch('/api/admin/seasons')).json();
+  const active = seasons.find(s => s.status === 'active');
+  document.getElementById('seasonSel').innerHTML = seasons.map(s =>
+    `<option value="${s.id}" ${active && s.id === active.id ? 'selected' : ''}>${s.name}</option>`
+  ).join('');
+  document.getElementById('filterSeason').innerHTML =
+    '<option value="">All seasons</option>' +
+    seasons.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+
+  if (active) {
+    const weeks = await (await fetch(`/api/admin/weeks?season_id=${active.id}`)).json();
+    const maxWeek = weeks.reduce((m, w) => Math.max(m, w.week_number), 0);
+    document.getElementById('weekNum').value = maxWeek + 1;
+  }
+}
+
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+async function onSeasonFilterChange() {
+  const seasonId = document.getElementById('filterSeason').value;
+  const weekSel  = document.getElementById('filterWeek');
+  weekSel.innerHTML = '<option value="">All weeks</option>';
+  if (seasonId) {
+    const weeks = await (await fetch(`/api/admin/weeks?season_id=${seasonId}`)).json();
+    weeks.forEach(w => {
+      weekSel.innerHTML += `<option value="${w.id}">Week ${w.week_number}${w.week_date ? ' ('+w.week_date+')' : ''}</option>`;
+    });
+  }
+  loadList();
+}
+
+async function loadList() {
+  const seasonId = document.getElementById('filterSeason').value;
+  const weekId   = document.getElementById('filterWeek').value;
+  const weekUrl  = seasonId ? `/api/admin/weeks?season_id=${seasonId}` : '/api/admin/weeks';
+  let [weeks, allMatches] = await Promise.all([
+    (await fetch(weekUrl)).json(),
+    (await fetch('/api/admin/matches')).json()
+  ]);
+  if (weekId) weeks = weeks.filter(w => w.id == weekId);
+
+  const rows = weeks.map(w => {
+    const weekMatches = allMatches.filter(m => m.week_id === w.id);
+    const matchRows = weekMatches.map(m => `
+      <tr id="match-row-${m.id}" style="background:#f7f8fb">
+        <td style="padding-left:2rem" colspan="2">
+          <label style="display:inline-flex;align-items:center;gap:.4rem;cursor:pointer">
+            <input type="checkbox" class="match-chk" data-week="${w.id}" value="${m.id}" onchange="updateDeleteSelected(${w.id})">
+            <a href="/match/${m.id}">${esc(m.map || 'Unknown map')}</a>
+          </label>
+        </td>
+        <td><span class="team-red">${m.red_score}</span> : <span class="team-blue">${m.blue_score}</span></td>
+        <td class="num">${m.player_count} players</td>
+        <td class="text-muted" style="font-size:.8rem">${m.imported_at ? m.imported_at.replace('T',' ').slice(0,16) : '—'}</td>
+        <td>
+          <button class="btn btn-outline btn-sm" onclick="editMatch(${m.id})">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteMatch(${m.id})">Delete</button>
+        </td>
+      </tr>
+      <tr id="match-edit-${m.id}" style="display:none;background:#edf3ff">
+        <td colspan="6" style="padding:.75rem 1rem">
+          <div class="form-row">
+            <div class="form-group"><label>Map</label><input type="text" id="em-map-${m.id}" value="${esc(m.map||'')}"></div>
+            <div class="form-group"><label>Server</label><input type="text" id="em-server-${m.id}" value="${esc(m.server||'')}"></div>
+            <div class="form-group"><label>Date</label><input type="date" id="em-date-${m.id}" value="${m.match_date||''}"></div>
+            <div class="form-group" style="flex:0;align-self:flex-end">
+              <button class="btn btn-success btn-sm" onclick="saveMatch(${m.id})">Save</button>
+              <button class="btn btn-secondary btn-sm" onclick="cancelEdit('match-edit-${m.id}')">Cancel</button>
+            </div>
+          </div>
+        </td>
+      </tr>`).join('');
+
+    return `
+    <tr id="week-row-${w.id}" style="background:#e9eaf1">
+      <td>${w.season_name}</td>
+      <td>
+        ${w.match_count > 0 ? `<input type="checkbox" id="sel-all-${w.id}" onchange="toggleSelectAll(${w.id}, this.checked)" style="margin-right:.5rem;cursor:pointer">` : ''}Week ${w.week_number}
+      </td>
+      <td>${w.week_date || '—'}</td>
+      <td class="num">${w.match_count}</td>
+      <td>${w.created_at.split('T')[0]}</td>
+      <td style="white-space:nowrap">
+        <a href="/admin/import?week_id=${w.id}" class="btn btn-primary btn-sm">Import</a>
+        <button class="btn btn-outline btn-sm" onclick="editWeek(${w.id}, ${w.week_number}, '${w.week_date||''}')">Edit</button>
+        ${w.match_count === 0
+          ? `<button class="btn btn-danger btn-sm" onclick="deleteWeek(${w.id})">Delete</button>`
+          : `<button id="del-sel-${w.id}" class="btn btn-danger btn-sm" disabled onclick="deleteSelectedMatches(${w.id})">Delete</button>`}
+      </td>
+    </tr>
+    <tr id="week-edit-${w.id}" style="display:none;background:#edf3ff">
+      <td colspan="6" style="padding:.75rem 1rem">
+        <div class="form-row">
+          <div class="form-group"><label>Week number</label><input type="number" id="ew-num-${w.id}" value="${w.week_number}" style="width:80px"></div>
+          <div class="form-group"><label>Date</label><input type="date" id="ew-date-${w.id}" value="${w.week_date||''}"></div>
+          <div class="form-group" style="flex:0;align-self:flex-end">
+            <button class="btn btn-success btn-sm" onclick="saveWeek(${w.id})">Save</button>
+            <button class="btn btn-secondary btn-sm" onclick="cancelEdit('week-edit-${w.id}')">Cancel</button>
+          </div>
+        </div>
+      </td>
+    </tr>
+    ${matchRows}`;
+  }).join('');
+
+  document.getElementById('list').innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Season</th><th>Week</th><th>Date</th><th class="num" style="width:120px">Matches</th><th>Created</th><th style="width:1px"></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="6" class="text-muted">No weeks.</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+function editWeek(id) {
+  document.getElementById(`week-edit-${id}`).style.display = '';
+}
+function editMatch(id) {
+  document.getElementById(`match-edit-${id}`).style.display = '';
+}
+function cancelEdit(rowId) {
+  document.getElementById(rowId).style.display = 'none';
+}
+
+async function saveWeek(id) {
+  const week_number = document.getElementById(`ew-num-${id}`).value;
+  const week_date   = document.getElementById(`ew-date-${id}`).value;
+  const res = await fetch(`/api/admin/weeks/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ week_number: parseInt(week_number), week_date: week_date || null })
+  });
+  if (res.ok) loadList();
+  else { const d = await res.json(); alert(d.error); }
+}
+
+async function saveMatch(id) {
+  const map        = document.getElementById(`em-map-${id}`).value;
+  const server     = document.getElementById(`em-server-${id}`).value;
+  const match_date = document.getElementById(`em-date-${id}`).value;
+  const res = await fetch(`/api/admin/matches/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ map, server, match_date: match_date || null })
+  });
+  if (res.ok) loadList();
+  else { const d = await res.json(); alert(d.error); }
+}
+
+async function deleteMatch(id) {
+  if (!confirm('Delete this match? All player stats will also be removed.')) return;
+  const res = await fetch(`/api/admin/matches/${id}`, { method: 'DELETE' });
+  if (res.ok) loadList();
+}
+
+function updateDeleteSelected(weekId) {
+  const all     = document.querySelectorAll(`.match-chk[data-week="${weekId}"]`);
+  const checked = document.querySelectorAll(`.match-chk[data-week="${weekId}"]:checked`);
+  const btn     = document.getElementById(`del-sel-${weekId}`);
+  const selAll  = document.getElementById(`sel-all-${weekId}`);
+  if (btn) {
+    btn.disabled = checked.length === 0;
+    btn.textContent = checked.length > 0 ? `Delete (${checked.length})` : 'Delete';
+  }
+  if (selAll) {
+    selAll.checked       = checked.length > 0 && checked.length === all.length;
+    selAll.indeterminate = checked.length > 0 && checked.length < all.length;
+  }
+}
+
+function toggleSelectAll(weekId, checked) {
+  document.querySelectorAll(`.match-chk[data-week="${weekId}"]`).forEach(chk => chk.checked = checked);
+  updateDeleteSelected(weekId);
+}
+
+async function deleteSelectedMatches(weekId) {
+  const checked = [...document.querySelectorAll(`.match-chk[data-week="${weekId}"]:checked`)];
+  if (!checked.length) return;
+  if (!confirm(`Delete ${checked.length} match${checked.length > 1 ? 'es' : ''}? All player stats will also be removed.`)) return;
+  for (const chk of checked) {
+    await fetch(`/api/admin/matches/${chk.value}`, { method: 'DELETE' });
+  }
+  loadList();
+}
+
+async function createWeek() {
+  const season_id = document.getElementById('seasonSel').value;
+  const week_number = document.getElementById('weekNum').value;
+  const week_date = document.getElementById('weekDate').value || null;
+  if (!week_number) return;
+  const res = await fetch('/api/admin/weeks', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ season_id, week_number: parseInt(week_number), week_date })
+  });
+  const data = await res.json();
+  if (res.ok) {
+    document.getElementById('createMsg').innerHTML = '<div class="alert alert-success">Week created.</div>';
+    await loadSeasons();
+    loadList();
+  } else {
+    document.getElementById('createMsg').innerHTML = `<div class="alert alert-error">${data.error}</div>`;
+  }
+}
+
+async function deleteWeek(id) {
+  if (!confirm('Delete this week?')) return;
+  const res = await fetch(`/api/admin/weeks/${id}`, { method: 'DELETE' });
+  if (res.ok) loadList();
+}
+
+checkAuth().then(loadSeasons).then(loadList);
+</script>
+</body>
+</html>

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Match — Sunday Ladder</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<nav>
+  <span class="brand">Sunday Ladder</span>
+  <a href="/">Standings</a>
+  <a href="/history">History</a>
+  <span class="nav-right"><a href="/admin">Admin</a></span>
+</nav>
+<div class="content">
+  <div id="app"><p class="loading">Loading…</p></div>
+</div>
+<script>
+const fmt = (n, d=2) => (typeof n === 'number' && isFinite(n)) ? n.toFixed(d) : '—';
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+const id = window.location.pathname.split('/').pop();
+
+async function load() {
+  const res = await fetch(`/api/match/${id}`);
+  if (!res.ok) { document.getElementById('app').innerHTML = '<p class="alert alert-error">Match not found.</p>'; return; }
+  const { match, stats, prevMatch, nextMatch } = await res.json();
+
+  document.title = `${match.map || 'Match'} — Sunday Ladder`;
+
+  const result = match.red_score > match.blue_score ? 'Red wins'
+               : match.blue_score > match.red_score ? 'Blue wins'
+               : 'Draw';
+
+  const redStats  = stats.filter(s => s.team === 'Red');
+  const blueStats = stats.filter(s => s.team === 'Blue');
+
+  function playerRows(teamStats) {
+    return teamStats.map(s => {
+      const b = s.breakdown;
+      return `
+      <tr>
+        <td><a href="/player/${s.player_id}">${esc(s.display_name)}</a>
+          ${s.alias_used !== s.display_name ? `<br><span class="text-muted">${esc(s.alias_used)}</span>` : ''}</td>
+        <td class="num">${s.flag_capture}</td>
+        <td class="num">${s.flag_return}</td>
+        <td class="num">${s.flag_kill}</td>
+        <td class="num">${s.flag_cover}</td>
+        <td class="num">${s.flag_seal}</td>
+        <td class="num">${s.flag_assist}</td>
+        <td class="num" style="border-left:2px solid #e0e0e0">
+          <span title="${esc(b.overall_desc)}">${fmt(b.overall_bonus)}</span>
+        </td>
+        <td class="num">${fmt(b.cap_points)}</td>
+        <td class="num">${fmt(b.cover_points)}</td>
+        <td class="num">${fmt(b.assist_points)}</td>
+        <td class="num">${fmt(b.return_points)}</td>
+        <td class="num">${fmt(b.flag_kill_points)}</td>
+        <td class="num">${fmt(b.seal_points)}</td>
+        <td class="num">${fmt(b.clean_sheet)}</td>
+        <td class="num" style="border-left:2px solid #e0e0e0"><strong>${fmt(s.total_points)}</strong></td>
+      </tr>`;
+    }).join('');
+  }
+
+  const theadHTML = `
+    <thead>
+      <tr>
+        <th>Player</th>
+        <th class="num" title="Flag Captures">Cap</th>
+        <th class="num" title="Flag Returns">Ret</th>
+        <th class="num" title="Flag Kills">Kill</th>
+        <th class="num" title="Flag Covers">Cov</th>
+        <th class="num" title="Flag Seals">Seal</th>
+        <th class="num" title="Flag Assists">Ast</th>
+        <th class="num" style="border-left:2px solid #334" title="Overall bonus">OvB</th>
+        <th class="num" title="Cap points">CapP</th>
+        <th class="num" title="Cover points">CovP</th>
+        <th class="num" title="Assist points">AstP</th>
+        <th class="num" title="Return points">RetP</th>
+        <th class="num" title="Flag kill points">KillP</th>
+        <th class="num" title="Seal points">SealP</th>
+        <th class="num" title="Clean sheet">CS</th>
+        <th class="num" style="border-left:2px solid #334">Total</th>
+      </tr>
+    </thead>`;
+
+  document.getElementById('app').innerHTML = `
+    <p class="text-muted mb-1">
+      <button class="btn btn-outline btn-sm" onclick="history.back()">← Back</button>
+      <a href="/">Standings</a> ›
+      <a href="/week/${match.week_id}">Week ${match.week_number}</a> ›
+      ${esc(match.season_name)}
+    </p>
+    <h1>${esc(match.map || 'Unknown map')}</h1>
+    <div class="week-nav" style="margin-bottom:1rem">
+      ${prevMatch ? `<a href="/match/${prevMatch.id}" class="btn btn-outline btn-sm">← Previous match</a>` : '<span></span>'}
+      ${nextMatch ? `<a href="/match/${nextMatch.id}" class="btn btn-outline btn-sm">Next match →</a>` : '<span></span>'}
+    </div>
+
+    <div class="card flex mb-2" style="flex-wrap:wrap;gap:1.5rem">
+      <div>${match.server ? `<strong>Server:</strong> ${esc(match.server)}` : ''}</div>
+      <div>${match.match_date ? `<strong>Date:</strong> ${match.match_date}` : ''}</div>
+      <div>${match.game_type ? `<strong>Type:</strong> ${esc(match.game_type)}` : ''}</div>
+    </div>
+
+    <div class="score-box">
+      <div class="red-side">
+        <div class="team-name" style="color:#ef9a9a">Red</div>
+        <div class="score-num" style="color:#ef5350">${match.red_score}</div>
+      </div>
+      <div class="vs">${result}</div>
+      <div class="blue-side">
+        <div class="team-name" style="color:#90caf9">Blue</div>
+        <div class="score-num" style="color:#42a5f5">${match.blue_score}</div>
+      </div>
+    </div>
+
+    <h2 class="team-red">Red Team</h2>
+    <div class="table-wrap">
+      <table>${theadHTML}<tbody>${playerRows(redStats)}</tbody></table>
+    </div>
+
+    <h2 class="team-blue">Blue Team</h2>
+    <div class="table-wrap">
+      <table>${theadHTML}<tbody>${playerRows(blueStats)}</tbody></table>
+    </div>
+
+    <p class="text-muted mt-2" style="font-size:0.8rem">
+      Column headers: Cap=Captures, Ret=Returns, Kill=Flag kills, Cov=Covers, Seal=Seals, Ast=Assists |
+      Points: OvB=Overall bonus, CapP/CovP/AstP=Attacking, RetP/KillP/SealP=Defending, CS=Clean sheet
+    </p>
+  `;
+}
+
+load();
+</script>
+</body>
+</html>

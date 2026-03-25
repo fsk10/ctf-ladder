@@ -1,0 +1,14 @@
+module.exports = {
+  apps: [{
+    name: 'sundayladder',
+    script: 'server.js',
+    env: {
+      NODE_ENV: 'production',
+      PORT: 3001,
+      SESSION_SECRET: 'generate-with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"',
+      ADMIN_USER: 'admin',
+      ADMIN_PASS: 'change-this-password',
+      ENABLE_TEST_DATA: 'false'
+    }
+  }]
+};

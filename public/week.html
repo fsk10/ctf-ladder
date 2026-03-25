@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Week — Sunday Ladder</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    thead th { cursor: pointer; user-select: none; }
+    thead th:hover { background: #2a2a4e; }
+    thead th:first-child { cursor: default; }
+    thead th:first-child:hover { background: #1a1a2e; }
+  </style>
+</head>
+<body>
+<nav>
+  <span class="brand">Sunday Ladder</span>
+  <a href="/">Standings</a>
+  <a href="/history">History</a>
+  <span class="nav-right"><a href="/admin">Admin</a></span>
+</nav>
+<div class="content">
+  <div id="app"><p class="loading">Loading…</p></div>
+</div>
+<script>
+const fmt = (n, d=2) => (typeof n === 'number' && isFinite(n)) ? n.toFixed(d) : '—';
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+const id = window.location.pathname.split('/').pop();
+let viewMode = localStorage.getItem('standingsView') === 'raw' ? 'raw' : 'points';
+let sortState = { col: 'score', dir: -1 };
+let weekPageData = null;
+
+function applyViewClass() {
+  document.body.classList.toggle('full-stats', viewMode === 'raw');
+}
+applyViewClass();
+
+function sortedData(data) {
+  if (!sortState.col) return data;
+  return [...data].sort((a, b) => {
+    const av = a[sortState.col], bv = b[sortState.col];
+    if (typeof av === 'string') return sortState.dir * av.localeCompare(bv);
+    return sortState.dir * ((av ?? -Infinity) - (bv ?? -Infinity));
+  });
+}
+
+function sortBy(col) {
+  if (sortState.col === col) sortState.dir *= -1;
+  else { sortState.col = col; sortState.dir = col === 'display_name' ? 1 : -1; }
+  const container = document.getElementById('standingsContainer');
+  if (container) container.innerHTML = renderStandings();
+}
+
+function setView(mode) {
+  viewMode = mode;
+  localStorage.setItem('standingsView', mode);
+  applyViewClass();
+  sortState = mode === 'points' ? { col: 'score', dir: -1 } : { col: 'total_caps', dir: -1 };
+  const container = document.getElementById('standingsContainer');
+  if (container) container.innerHTML = renderStandings();
+}
+
+function th(label, col, leftAlign = false, tooltip = '') {
+  const isActive = sortState.col === col;
+  const arrow = isActive ? (sortState.dir === -1 ? ' ▼' : ' ▲') : '';
+  const cls = leftAlign ? '' : ' class="num"';
+  const titleAttr = tooltip ? ` title="${tooltip}"` : '';
+  return `<th${cls}${titleAttr} onclick="sortBy('${col}')">${label}${arrow}</th>`;
+}
+
+function viewToggleHTML() {
+  return `<div style="display:flex;justify-content:flex-end;margin-bottom:.5rem;gap:.4rem">
+    <button class="btn btn-sm ${viewMode==='points'?'btn-primary':'btn-outline'}" onclick="setView('points')">Points</button>
+    <button class="btn btn-sm ${viewMode==='raw'?'btn-primary':'btn-outline'}" onclick="setView('raw')">CTF Stats</button>
+  </div>`;
+}
+
+function tableHeaders() {
+  if (viewMode === 'points') {
+    return `<th class="num">#</th>
+      ${th('Player', 'display_name', true)}
+      ${th('Pugs', 'pugs_played', false, 'Pugs played')}
+      ${th('Total Pts', 'total_points', false, 'Total points earned')}
+      ${th('Avg Pts/Pug', 'avg_points_per_pug', false, 'Average points per pug')}
+      ${th('Part. Bonus', 'participation_bonus', false, 'Participation bonus (2.5 × √pugs)')}
+      ${th('Weekly Score', 'score', false, 'Weekly score = (total pts / pugs) + participation bonus')}`;
+  } else {
+    return `<th class="num">#</th>
+      ${th('Player', 'display_name', true)}
+      ${th('Pugs', 'pugs_played', false, 'Pugs played')}
+      ${th('D', 'draws', false, 'Draws')}
+      ${th('W', 'wins', false, 'Wins')}
+      ${th('W3', 'wins_by3', false, 'Wins by 3+ caps')}
+      ${th('W5', 'wins_by5', false, 'Wins by 5+ caps')}
+      ${th('L5', 'losses_by5', false, 'Losses by 5+ caps')}
+      ${th('Cap', 'total_caps', false, 'Flag captures')}
+      ${th('Ast', 'total_assists', false, 'Flag assists')}
+      ${th('Cov', 'total_covers', false, 'Flag covers')}
+      ${th('Kill', 'total_kills', false, 'Flag kills')}
+      ${th('Ret', 'total_returns', false, 'Flag returns')}
+      ${th('Seal', 'total_seals', false, 'Flag seals')}
+      ${th('CS', 'clean_sheets', false, 'Clean sheets (opponent capped 0)')}`;
+  }
+}
+
+function tableRow(p, rank) {
+  if (viewMode === 'points') {
+    return `<tr>
+      <td class="rank">${rank}</td>
+      <td><a href="/player/${p.player_id}">${esc(p.display_name)}</a></td>
+      <td class="num">${p.pugs_played}</td>
+      <td class="num">${fmt(p.total_points)}</td>
+      <td class="num">${fmt(p.avg_points_per_pug)}</td>
+      <td class="num">${fmt(p.participation_bonus)}</td>
+      <td class="num"><strong>${fmt(p.score)}</strong></td>
+    </tr>`;
+  } else {
+    return `<tr>
+      <td class="rank">${rank}</td>
+      <td><a href="/player/${p.player_id}">${esc(p.display_name)}</a></td>
+      <td class="num">${p.pugs_played}</td>
+      <td class="num">${p.draws}</td>
+      <td class="num">${p.wins}</td>
+      <td class="num">${p.wins_by3}</td>
+      <td class="num">${p.wins_by5}</td>
+      <td class="num">${p.losses_by5}</td>
+      <td class="num">${p.total_caps}</td>
+      <td class="num">${p.total_assists}</td>
+      <td class="num">${p.total_covers}</td>
+      <td class="num">${p.total_kills}</td>
+      <td class="num">${p.total_returns}</td>
+      <td class="num">${p.total_seals}</td>
+      <td class="num">${p.clean_sheets}</td>
+    </tr>`;
+  }
+}
+
+function renderStandings() {
+  const standings = weekPageData.standings;
+  if (standings.length === 0) return '<p class="text-muted">No matches this week yet.</p>';
+  const sorted = sortedData(standings);
+  const rows = sorted.map((p, i) => tableRow(p, i + 1)).join('');
+  return `${viewToggleHTML()}
+    <div class="table-wrap"><table>
+      <thead><tr>${tableHeaders()}</tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>`;
+}
+
+async function load() {
+  const res = await fetch(`/api/week/${id}`);
+  if (!res.ok) { document.getElementById('app').innerHTML = '<p class="alert alert-error">Week not found.</p>'; return; }
+  const data = await res.json();
+  weekPageData = data;
+
+  const { week, matches, prev, next } = data;
+  document.title = `Week ${week.week_number} — Sunday Ladder`;
+
+  const matchRows = matches.map(m => `
+    <tr>
+      <td>${m.match_date || '—'}</td>
+      <td><a href="/match/${m.id}">${esc(m.map || 'Unknown map')}</a></td>
+      <td>${esc(m.server || '—')}</td>
+      <td class="num"><span class="team-red">${m.red_score}</span> : <span class="team-blue">${m.blue_score}</span></td>
+    </tr>`).join('');
+
+  document.getElementById('app').innerHTML = `
+    <p class="text-muted mb-1">
+      <button class="btn btn-outline btn-sm" onclick="history.back()">← Back</button>
+      <a href="/">Standings</a> › <a href="/">${esc(week.season_name)}</a>
+    </p>
+    <h1>Week ${week.week_number}${week.week_date ? ` <span class="text-muted" style="font-size:1rem">${week.week_date}</span>` : ''}</h1>
+    <p class="text-muted mb-2">${esc(week.season_name)}</p>
+
+    <div class="week-nav">
+      ${prev ? `<a href="/week/${prev.id}" class="btn btn-outline btn-sm">← Week ${prev.week_number}</a>` : '<span></span>'}
+      ${next ? `<a href="/week/${next.id}" class="btn btn-outline btn-sm">Week ${next.week_number} →</a>` : '<span></span>'}
+    </div>
+
+    <h2>Player Rankings</h2>
+    <div id="standingsContainer">${renderStandings()}</div>
+
+    <h2>Matches (${matches.length})</h2>
+    ${matches.length === 0 ? '<p class="text-muted">No matches imported yet.</p>' : `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Date</th><th>Map</th><th>Server</th><th class="num">Score</th></tr></thead>
+        <tbody>${matchRows}</tbody>
+      </table>
+    </div>`}
+  `;
+}
+
+load();
+</script>
+</body>
+</html>

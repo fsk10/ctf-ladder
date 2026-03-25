@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Import Match — Admin</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .resolve-table th, .resolve-table td { padding: .4rem .7rem; font-size: .88rem; }
+    .stat-cell { color: #555; font-size: .82rem; }
+    #queueList { list-style: none; padding: 0; margin: .5rem 0 0; }
+    #queueList li {
+      padding: .3rem .6rem;
+      border-radius: 3px;
+      font-size: .83rem;
+      margin-bottom: .25rem;
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+    }
+    .q-pending  { background: #f5f5f5; color: #555; }
+    .q-active   { background: #e3f2fd; color: #0d47a1; font-weight: 600; }
+    .q-done     { background: #e8f5e9; color: #2e7d32; }
+    .q-skipped  { background: #fff8e1; color: #e65100; }
+    .q-error    { background: #ffebee; color: #b71c1c; }
+    .q-icon     { font-size: 1rem; flex-shrink: 0; }
+    .q-url      { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: monospace; }
+  </style>
+</head>
+<body>
+<nav>
+  <span class="brand">Sunday Ladder</span>
+  <a href="/admin/dashboard">Dashboard</a>
+  <a href="/admin/import">Import</a>
+  <a href="/admin/weeks">Weeks</a>
+  <a href="/admin/seasons">Seasons</a>
+  <a href="/admin/players">Players</a>
+  <a href="/admin/settings">Settings</a>
+  <a href="/admin/security">Security</a>
+  <span class="nav-right">
+    <a href="/">Public</a>
+    <a href="#" onclick="logout()">Logout</a>
+  </span>
+</nav>
+<div class="content">
+  <h1>Import Match</h1>
+
+  <div class="card mb-2" id="testPanel">
+    <h3>Test data <span class="badge badge-orange">dev</span></h3>
+    <p class="text-muted mt-1" style="font-size:.85rem">Click a match to fill the URL field. Use these while the real UTStats API is not yet available.</p>
+    <div id="testMatchList" class="flex mt-1"><span class="text-muted">Loading…</span></div>
+  </div>
+
+  <div class="card mb-2">
+    <h3>Step 1 — Add match URLs</h3>
+    <p class="text-muted mt-1" style="font-size:.85rem">
+      Paste one or multiple URLs, one per line. They will be processed one at a time.
+    </p>
+    <div class="form-row mt-1">
+      <div class="form-group">
+        <label>Week</label>
+        <select id="weekSel"></select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>URLs (one per line)</label>
+      <textarea id="urlInput" rows="4" placeholder="https://…&#10;https://…&#10;https://…"></textarea>
+    </div>
+    <div id="fetchMsg"></div>
+    <div style="display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap">
+      <button class="btn btn-primary" id="startBtn" onclick="startQueue()">Start import queue</button>
+      <label style="display:flex;align-items:center;gap:.45rem;cursor:pointer;font-size:.88rem;font-weight:600;color:#444;user-select:none">
+        <input type="checkbox" id="autoImportToggle" style="width:auto;cursor:pointer">
+        Auto-import (create unknown players automatically)
+      </label>
+    </div>
+  </div>
+
+  <div id="queueCard" style="display:none" class="card mb-2">
+    <div class="flex" style="justify-content:space-between;align-items:center">
+      <h3>Queue</h3>
+      <span id="queueProgress" class="text-muted" style="font-size:.85rem"></span>
+    </div>
+    <ul id="queueList"></ul>
+  </div>
+
+  <div id="step2" style="display:none">
+    <div class="card mb-2" id="matchInfoCard"></div>
+    <div class="card mb-2">
+      <h3 id="step2Title">Step 2 — Resolve players</h3>
+      <p class="text-muted mt-1" style="font-size:.85rem">
+        Players with a known alias are auto-matched. For unknown players, select an existing player or enter a new display name.
+      </p>
+      <div id="resolveMsg" class="mt-1"></div>
+      <div class="table-wrap mt-1">
+        <table class="resolve-table">
+          <thead>
+            <tr>
+              <th>In-game name</th><th>Team</th><th>Cap/Ret/Kill/Cov/Seal/Ast</th><th>Pts</th><th>Resolution</th>
+            </tr>
+          </thead>
+          <tbody id="resolveBody"></tbody>
+          <tfoot>
+            <tr id="previewTotals" style="display:none">
+              <td colspan="3" style="font-size:.8rem;color:#888;padding:.4rem .7rem">Preview points based on current scoring settings</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div class="flex mt-2">
+        <button class="btn btn-success" onclick="confirmImport()">Confirm &amp; import</button>
+        <button class="btn btn-secondary" onclick="skipMatch()">Skip this match</button>
+        <button class="btn btn-danger" onclick="abortQueue()">Abort queue</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/admin/common.js"></script>
+<script>
+let queue = [];
+let queueIndex = 0;
+let fetchedData = null;
+let allPlayers = [];
+
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+async function loadWeeks() {
+  const weeks = await (await fetch('/api/admin/weeks')).json();
+  const params = new URLSearchParams(window.location.search);
+  const preselect = params.get('week_id');
+  document.getElementById('weekSel').innerHTML = weeks.map(w =>
+    `<option value="${w.id}" ${w.id == preselect ? 'selected' : ''}>${w.season_name} — Week ${w.week_number}${w.week_date ? ' ('+w.week_date+')' : ''}</option>`
+  ).join('') || '<option disabled>No weeks — create one first</option>';
+}
+
+function startQueue() {
+  const raw = document.getElementById('urlInput').value;
+  const urls = raw.split('\n').map(s => s.trim()).filter(Boolean);
+  if (urls.length === 0) {
+    document.getElementById('fetchMsg').innerHTML = '<div class="alert alert-warn">Enter at least one URL.</div>';
+    return;
+  }
+  const weekSel = document.getElementById('weekSel');
+  const weekLabel = weekSel.options[weekSel.selectedIndex]?.text || '';
+  document.getElementById('fetchMsg').innerHTML = '';
+  document.getElementById('startBtn').disabled = true;
+  queue = urls.map(url => ({ url, status: 'pending', weekLabel }));
+  queueIndex = 0;
+  renderQueue();
+  document.getElementById('queueCard').style.display = '';
+  processNext();
+}
+
+function renderQueue() {
+  const icons = { pending: '⏳', active: '▶', done: '✓', skipped: '⏭', error: '✗' };
+  document.getElementById('queueList').innerHTML = queue.map(item => {
+    const extra = item.error ? ` — ${esc(item.error)}` : item.matchId ? ` — <a href="/match/${item.matchId}">view</a>${item.weekLabel ? ' · ' + esc(item.weekLabel) : ''}` : '';
+    return `<li class="q-${item.status}"><span class="q-icon">${icons[item.status]}</span><span class="q-url" title="${esc(item.url)}">${esc(item.url)}</span>${extra}</li>`;
+  }).join('');
+  const done = queue.filter(q => q.status === 'done').length;
+  document.getElementById('queueProgress').textContent = `${done} / ${queue.length} imported`;
+}
+
+async function processNext() {
+  while (queueIndex < queue.length && queue[queueIndex].status !== 'pending') queueIndex++;
+  if (queueIndex >= queue.length) { finishQueue(); return; }
+
+  queue[queueIndex].status = 'active';
+  renderQueue();
+
+  const res = await fetch('/api/admin/fetch-match-data', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: queue[queueIndex].url })
+  });
+  const data = await res.json();
+
+  if (!res.ok) {
+    queue[queueIndex].status = 'error';
+    queue[queueIndex].error = data.error;
+    renderQueue();
+    queueIndex++;
+    processNext();
+    return;
+  }
+
+  fetchedData = data;
+  allPlayers = data.allPlayers;
+
+  if (document.getElementById('autoImportToggle').checked) {
+    autoConfirmImport(data);
+  } else {
+    renderStep2(data);
+  }
+}
+
+async function autoConfirmImport({ matchInfo, players }) {
+  const week_id = document.getElementById('weekSel').value;
+  const resolvedPlayers = players.map(p => ({
+    name: p.name,
+    team: p.team,
+    stats: p.stats,
+    player_id: p.resolved_player_id || null,
+    new_player_name: p.resolved_player_id ? null : p.name
+  }));
+
+  const res = await fetch('/api/admin/import-match', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ week_id, url: queue[queueIndex].url, matchInfo, players: resolvedPlayers })
+  });
+  const data = await res.json();
+
+  if (res.ok) {
+    queue[queueIndex].status = 'done';
+    queue[queueIndex].matchId = data.match_id;
+    const freshPlayers = await (await fetch('/api/admin/players')).json();
+    allPlayers = freshPlayers.map(p => ({ id: p.id, display_name: p.display_name }));
+  } else {
+    queue[queueIndex].status = 'error';
+    queue[queueIndex].error = data.error;
+  }
+  fetchedData = null;
+  queueIndex++;
+  renderQueue();
+  processNext();
+}
+
+function renderStep2({ matchInfo, players }) {
+  const { red_score, blue_score, map, server, match_date } = matchInfo;
+  const result = red_score > blue_score ? 'Red wins' : blue_score > red_score ? 'Blue wins' : 'Draw';
+  const remaining = queue.filter(q => q.status === 'pending').length;
+
+  document.getElementById('step2Title').textContent =
+    `Step 2 — Resolve players (${queueIndex + 1} of ${queue.length}${remaining > 0 ? `, ${remaining} remaining` : ''})`;
+
+  document.getElementById('matchInfoCard').innerHTML = `
+    <div class="flex">
+      <div><strong>Map:</strong> ${esc(map || '—')}</div>
+      <div><strong>Server:</strong> ${esc(server || '—')}</div>
+      <div><strong>Date:</strong> ${match_date || '—'}</div>
+      <div style="font-size:1.1rem">
+        <span class="team-red">${red_score}</span> : <span class="team-blue">${blue_score}</span>
+        <span class="text-muted">${result}</span>
+      </div>
+    </div>`;
+
+  const rows = players.map((p, i) => {
+    const teamBadge = p.team === 'Red' ? '<span class="badge badge-red">Red</span>' : '<span class="badge badge-blue">Blue</span>';
+    const s = p.stats;
+    const playerOpts = allPlayers.map(pl =>
+      `<option value="${pl.id}" ${pl.id === p.resolved_player_id ? 'selected' : ''}>${esc(pl.display_name)}</option>`
+    ).join('');
+    let resCell;
+    if (p.resolved_player_id) {
+      resCell = `<span class="status-ok">✓ ${esc(p.resolved_display_name)}</span>
+                 <input type="hidden" id="pid-${i}" value="${p.resolved_player_id}">`;
+    } else {
+      resCell = `<span class="status-unknown">⚠ Unknown</span>
+        <select id="sel-${i}" onchange="onSelectChange(${i})">
+          <option value="">— Select existing player —</option>
+          ${playerOpts}
+          <option value="__new__" selected>+ Create new player…</option>
+        </select>
+        <input type="text" id="newname-${i}" placeholder="${esc(p.name)} (leave blank to use in-game name)" style="margin-top:.3rem">
+        <input type="hidden" id="pid-${i}" value="">`;
+    }
+    const pts = typeof p.preview_points === 'number' ? p.preview_points.toFixed(2) : '—';
+    return `<tr><td>${esc(p.name)}</td><td>${teamBadge}</td><td class="stat-cell">${s.flag_capture}/${s.flag_return}/${s.flag_kill}/${s.flag_cover}/${s.flag_seal}/${s.flag_assist}</td><td class="num" style="font-weight:600">${pts}</td><td>${resCell}</td></tr>`;
+  }).join('');
+
+  document.getElementById('resolveBody').innerHTML = rows;
+  document.getElementById('resolveMsg').innerHTML = '';
+  document.getElementById('step2').style.display = '';
+  window.scrollTo({ top: document.getElementById('step2').offsetTop - 20, behavior: 'smooth' });
+}
+
+function onSelectChange(i) {
+  const sel = document.getElementById(`sel-${i}`);
+  const newInput = document.getElementById(`newname-${i}`);
+  const pidInput = document.getElementById(`pid-${i}`);
+  if (sel.value === '__new__') { newInput.style.display = ''; pidInput.value = ''; }
+  else { newInput.style.display = 'none'; pidInput.value = sel.value; }
+}
+
+async function confirmImport() {
+  const week_id = document.getElementById('weekSel').value;
+  const { matchInfo, players } = fetchedData;
+  const resolvedPlayers = players.map((p, i) => {
+    const pidInput  = document.getElementById(`pid-${i}`);
+    const selEl     = document.getElementById(`sel-${i}`);
+    const newNameEl = document.getElementById(`newname-${i}`);
+    let player_id = pidInput ? parseInt(pidInput.value) || null : null;
+    let new_player_name = null;
+    if (selEl && selEl.value === '__new__') {
+      // Fall back to in-game nick if display name field is left empty
+      new_player_name = (newNameEl && newNameEl.value.trim()) ? newNameEl.value.trim() : p.name;
+      player_id = null;
+    }
+    return { name: p.name, team: p.team, stats: p.stats, player_id, new_player_name };
+  });
+
+  const res = await fetch('/api/admin/import-match', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ week_id, url: queue[queueIndex].url, matchInfo, players: resolvedPlayers })
+  });
+  const data = await res.json();
+
+  if (res.ok) {
+    queue[queueIndex].status = 'done';
+    queue[queueIndex].matchId = data.match_id;
+    const freshPlayers = await (await fetch('/api/admin/players')).json();
+    allPlayers = freshPlayers.map(p => ({ id: p.id, display_name: p.display_name }));
+  } else {
+    document.getElementById('resolveMsg').innerHTML = `<div class="alert alert-error">${data.error}</div>`;
+    return;
+  }
+  document.getElementById('step2').style.display = 'none';
+  fetchedData = null;
+  queueIndex++;
+  renderQueue();
+  processNext();
+}
+
+function skipMatch() {
+  queue[queueIndex].status = 'skipped';
+  document.getElementById('step2').style.display = 'none';
+  fetchedData = null;
+  queueIndex++;
+  renderQueue();
+  processNext();
+}
+
+function abortQueue() {
+  queue.forEach(item => { if (item.status === 'pending' || item.status === 'active') item.status = 'skipped'; });
+  document.getElementById('step2').style.display = 'none';
+  fetchedData = null;
+  renderQueue();
+  document.getElementById('startBtn').disabled = false;
+  document.getElementById('fetchMsg').innerHTML = '<div class="alert alert-warn">Queue aborted.</div>';
+}
+
+function finishQueue() {
+  document.getElementById('step2').style.display = 'none';
+  const done = queue.filter(q => q.status === 'done').length;
+  const skipped = queue.filter(q => q.status === 'skipped').length;
+  const errors = queue.filter(q => q.status === 'error').length;
+  document.getElementById('fetchMsg').innerHTML = `
+    <div class="alert alert-success">Queue complete — ${done} imported, ${skipped} skipped, ${errors} error(s).</div>`;
+  document.getElementById('startBtn').disabled = false;
+  document.getElementById('urlInput').value = '';
+}
+
+async function loadTestMatches() {
+  const res = await fetch('/api/test/matches');
+  if (!res.ok) { document.getElementById('testPanel').style.display = 'none'; return; }
+  const matches = await res.json();
+  document.getElementById('testMatchList').innerHTML = matches.map(m =>
+    `<button class="btn btn-outline btn-sm" onclick="useTestUrl('${m.url}')">
+      ${m.map} (${m.score}) · ${m.players} players · ${m.date}
+    </button>`
+  ).join('');
+}
+
+function useTestUrl(url) {
+  const fullUrl = window.location.origin + url;
+  const current = document.getElementById('urlInput').value.trim();
+  document.getElementById('urlInput').value = current ? current + '\n' + fullUrl : fullUrl;
+}
+
+checkAuth().then(() => { loadWeeks(); loadTestMatches(); });
+</script>
+</body>
+</html>

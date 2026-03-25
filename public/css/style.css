@@ -1,0 +1,297 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  background: #f0f2f5;
+  color: #222;
+  min-height: 100vh;
+}
+
+a { color: #0069c0; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* NAV */
+nav {
+  background: #1a1a2e;
+  padding: 0 2rem;
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+nav .brand {
+  color: #fff;
+  font-size: 1.15rem;
+  font-weight: 700;
+  padding: 0 1.25rem 0 0;
+  display: flex;
+  align-items: center;
+  border-right: 1px solid #333;
+  margin-right: 0.5rem;
+}
+nav a {
+  color: #bbb;
+  padding: 0.85rem 1rem;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s, background 0.15s;
+  font-size: 0.92rem;
+}
+nav a:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.08);
+  text-decoration: none;
+}
+nav a.active {
+  color: #fff;
+  background: #0069c0;
+  text-decoration: none;
+}
+nav .nav-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.25rem;
+}
+nav .nav-right a {
+  border: 1px solid rgba(255,255,255,0.3);
+  border-radius: 4px;
+  padding: 0.38rem 0.85rem;
+  font-size: 0.85rem;
+  color: #ddd;
+}
+nav .nav-right a:hover {
+  background: rgba(255,255,255,0.12);
+  border-color: rgba(255,255,255,0.55);
+  color: #fff;
+  text-decoration: none;
+}
+
+/* CONTENT */
+.content {
+  max-width: 1100px;
+  margin: 2rem auto;
+  padding: 0 1.5rem;
+}
+body.full-stats .content {
+  max-width: 1400px;
+}
+
+h1 { font-size: 1.7rem; margin-bottom: 1.25rem; color: #1a1a2e; }
+h2 { font-size: 1.25rem; margin: 1.75rem 0 0.75rem; color: #1a1a2e; }
+h3 { font-size: 1rem; margin: 1rem 0 0.5rem; color: #444; }
+
+/* TABLES */
+.table-wrap { overflow-x: auto; margin-bottom: 1.5rem; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+table { width: 100%; border-collapse: collapse; background: #fff; }
+
+thead th {
+  background: #1a1a2e;
+  color: #fff;
+  padding: 0.6rem 0.9rem;
+  text-align: left;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+tbody tr:nth-child(even) { background: #f7f8fb; }
+tbody tr:hover { background: #edf3ff; }
+td {
+  padding: 0.52rem 0.9rem;
+  font-size: 0.9rem;
+  border-bottom: 1px solid #e8e8e8;
+}
+td.num, th.num { text-align: center; font-variant-numeric: tabular-nums; }
+td.rank { font-weight: 700; color: #999; text-align: center; width: 2.5rem; }
+tfoot td { font-weight: 700; background: #f0f2f5; border-top: 2px solid #1a1a2e; }
+
+/* CARD */
+.card {
+  background: #fff;
+  border-radius: 6px;
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  margin-bottom: 1.25rem;
+}
+
+/* GRID */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+@media (max-width: 700px) { .grid-2 { grid-template-columns: 1fr; } }
+
+/* FORMS */
+.form-group { margin-bottom: 1rem; }
+.form-group label { display: block; font-weight: 600; margin-bottom: 0.3rem; font-size: 0.88rem; color: #444; }
+input[type=text], input[type=password], input[type=number], input[type=date],
+select, textarea {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.93rem;
+  background: #fff;
+  color: #222;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: #0069c0;
+  box-shadow: 0 0 0 2px rgba(0,105,192,0.15);
+}
+.form-row { display: flex; gap: 0.75rem; align-items: flex-end; flex-wrap: wrap; }
+.form-row .form-group { flex: 1; min-width: 140px; }
+
+/* BUTTONS */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.48rem 1.1rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 600;
+  transition: background 0.15s, opacity 0.15s;
+  text-decoration: none;
+}
+.btn:hover { opacity: 0.88; text-decoration: none; }
+.btn-primary   { background: #0069c0; color: #fff; }
+.btn-success   { background: #2e7d32; color: #fff; }
+.btn-danger    { background: #c62828; color: #fff; }
+.btn:disabled  { opacity: .4; cursor: not-allowed; }
+.btn-secondary { background: #555;    color: #fff; }
+.btn-outline   { background: transparent; color: #0069c0; border: 1px solid #0069c0; }
+.btn-sm { padding: 0.38rem 0.65rem; font-size: 0.8rem; }
+
+/* ALERTS */
+.alert { padding: 0.7rem 1rem; border-radius: 4px; margin-bottom: 1rem; font-size: 0.88rem; }
+.alert-error   { background: #ffebee; color: #b71c1c; border: 1px solid #ef9a9a; }
+.alert-success { background: #e8f5e9; color: #1b5e20; border: 1px solid #a5d6a7; }
+.alert-info    { background: #e3f2fd; color: #0d47a1; border: 1px solid #90caf9; }
+.alert-warn    { background: #fff8e1; color: #e65100; border: 1px solid #ffe082; }
+
+/* BADGES */
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 3px;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+.badge-red    { background: #ffebee; color: #c62828; }
+.badge-blue   { background: #e3f2fd; color: #0d47a1; }
+.badge-green  { background: #e8f5e9; color: #2e7d32; }
+.badge-gray   { background: #eeeeee; color: #555; }
+.badge-orange { background: #fff3e0; color: #e65100; }
+
+/* TEAM COLORS */
+.team-red  { color: #c62828; font-weight: 700; }
+.team-blue { color: #0d47a1; font-weight: 700; }
+
+/* SCORE DISPLAY */
+.score-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  background: #1a1a2e;
+  border-radius: 6px;
+  color: #fff;
+  margin-bottom: 1.5rem;
+}
+.score-box .team-name { font-size: 1.1rem; font-weight: 700; min-width: 120px; }
+.score-box .score-num { font-size: 3rem; font-weight: 900; font-variant-numeric: tabular-nums; }
+.score-box .vs { color: #888; font-size: 1.2rem; }
+.score-box .red-side  { text-align: right; }
+.score-box .blue-side { text-align: left;  }
+
+/* ADMIN NAV */
+.admin-subnav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1.75rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+/* SEASON SELECT */
+.season-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+.season-bar label { font-weight: 600; font-size: 0.88rem; color: #555; }
+.season-bar select { width: auto; }
+
+/* MISC */
+.loading { color: #888; font-style: italic; padding: 2rem; text-align: center; }
+.text-muted { color: #888; font-size: 0.85rem; }
+.flex { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
+.mt-1 { margin-top: 0.5rem; }
+.mt-2 { margin-top: 1rem; }
+.mb-1 { margin-bottom: 0.5rem; }
+.mb-2 { margin-bottom: 1rem; }
+
+/* RESOLVE TABLE (import) */
+.resolve-table select, .resolve-table input[type=text] {
+  width: auto;
+  min-width: 160px;
+  padding: 0.25rem 0.45rem;
+  font-size: 0.85rem;
+}
+.status-ok      { color: #2e7d32; font-weight: 700; }
+.status-unknown { color: #e65100; font-weight: 700; }
+
+/* BREAKDOWN LIST */
+.breakdown dt { color: #666; font-size: 0.82rem; }
+.breakdown dd { text-align: right; font-variant-numeric: tabular-nums; font-size: 0.88rem; }
+dl.breakdown { display: grid; grid-template-columns: 1fr auto; gap: 0.2rem 1rem; }
+
+/* ALIAS TAGS */
+.alias-list { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.alias-tag {
+  background: #e8eaf6;
+  color: #283593;
+  border-radius: 3px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.82rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.alias-tag button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #999;
+  font-size: 0.9rem;
+  padding: 0;
+  line-height: 1;
+}
+.alias-tag button:hover { color: #c62828; }
+.alias-tag button[title*="Break"] { font-size: 0.75rem; }
+.alias-tag button[title*="Break"]:hover { color: #0069c0; }
+
+/* WEEK NAV */
+.week-nav { display: flex; justify-content: space-between; margin-bottom: 1.25rem; }
+
+/* SORTABLE TABLE HEADERS */
+thead th[onclick] { cursor: pointer; user-select: none; }
+thead th[onclick]:hover { background: #2a2a4e; }
+
+/* PROVISIONAL (below min matches threshold) */
+.provisional-row td { color: #bbb; background: #f9f9f9; }
+.provisional-row:nth-child(even) td { background: #f5f5f5; }
+.provisional-row:hover td { background: #f2f2f2 !important; }
+.provisional-row a { color: #bbb; }
+.provisional-divider td {
+  padding: 0;
+  border-top: 2px dashed #e0e0e0;
+  border-bottom: none;
+  line-height: 0;
+  font-size: 0;
+}

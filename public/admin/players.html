@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Players — Admin</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<nav>
+  <span class="brand">Sunday Ladder</span>
+  <a href="/admin/dashboard">Dashboard</a>
+  <a href="/admin/import">Import</a>
+  <a href="/admin/weeks">Weeks</a>
+  <a href="/admin/seasons">Seasons</a>
+  <a href="/admin/players">Players</a>
+  <a href="/admin/settings">Settings</a>
+  <a href="/admin/security">Security</a>
+  <span class="nav-right">
+    <a href="/">Public</a>
+    <a href="#" onclick="logout()">Logout</a>
+  </span>
+</nav>
+<div class="content">
+  <h1>Players</h1>
+
+  <div class="grid-2">
+    <div class="card mb-2">
+      <h3>Merge Players</h3>
+      <p class="text-muted mt-1" style="font-size:0.85rem">All stats and aliases from the source player are moved to the target player. The source player entry is removed. This can be undone if needed by splitting the alias.</p>
+      <div id="mergeMsg"></div>
+      <div class="form-row mt-1">
+        <div class="form-group">
+          <label>Source (to delete)</label>
+          <select id="mergeSource"></select>
+        </div>
+        <div class="form-group">
+          <label>Target (to keep)</label>
+          <select id="mergeTarget"></select>
+        </div>
+        <div class="form-group" style="flex:0">
+          <label>&nbsp;</label>
+          <button class="btn btn-danger" onclick="mergePlayers()">Merge</button>
+        </div>
+      </div>
+    </div>
+    <div class="card mb-2">
+      <h3>Filter</h3>
+      <div class="form-group mt-1">
+        <label>Search</label>
+        <input type="text" id="searchInput" placeholder="Search by name or alias…" oninput="renderList()">
+      </div>
+    </div>
+  </div>
+
+  <div id="list"><p class="loading">Loading…</p></div>
+</div>
+<script src="/admin/common.js"></script>
+<script>
+let allPlayers = [];
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+async function loadPlayers() {
+  allPlayers = await (await fetch('/api/admin/players')).json();
+  const opts = allPlayers.map(p => `<option value="${p.id}">${esc(p.display_name)}</option>`).join('');
+  document.getElementById('mergeSource').innerHTML = opts;
+  document.getElementById('mergeTarget').innerHTML = opts;
+  renderList();
+}
+
+function renderList() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const filtered = allPlayers.filter(p =>
+    p.display_name.toLowerCase().includes(q) ||
+    p.aliases.some(a => a.alias.toLowerCase().includes(q))
+  );
+  const rows = filtered.map(p => {
+    const aliasTags = p.aliases.map(a =>
+      `<span class="alias-tag">${esc(a.alias)}<button onclick="splitAlias(${p.id},${a.id})" title="Break out as separate player">⎇</button><button onclick="deleteAlias(${p.id},${a.id})" title="Remove alias">×</button></span>`
+    ).join('');
+    return `
+    <tr>
+      <td><span id="name-${p.id}">${esc(p.display_name)}</span></td>
+      <td class="num">${p.match_count}</td>
+      <td><div class="alias-list">${aliasTags || '<span class="text-muted">none</span>'}</div></td>
+      <td style="white-space:nowrap">
+        <a href="/player/${p.id}" class="btn btn-outline btn-sm">View</a>
+        <button class="btn btn-outline btn-sm" onclick="editName(${p.id})">Edit</button>
+        ${p.match_count === 0 && p.aliases.length === 0 ? `<button class="btn btn-danger btn-sm" onclick="deletePlayer(${p.id})">Delete</button>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+  document.getElementById('list').innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Display name</th><th class="num">Matches</th><th>Aliases</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="3" class="text-muted">No players found.</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+function editName(id) {
+  const player = allPlayers.find(p => p.id === id);
+  document.getElementById(`name-${id}`).outerHTML = `
+    <input type="text" id="nameinput-${id}" value="${esc(player.display_name)}" style="width:180px;padding:.25rem .45rem;font-size:.88rem">
+    <button class="btn btn-success btn-sm" onclick="saveName(${id})">Save</button>
+    <button class="btn btn-secondary btn-sm" onclick="loadPlayers()">Cancel</button>`;
+  document.getElementById(`nameinput-${id}`).focus();
+}
+
+async function saveName(id) {
+  const val = document.getElementById(`nameinput-${id}`).value.trim();
+  if (!val) return;
+  const res = await fetch(`/api/admin/players/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ display_name: val })
+  });
+  if (res.ok) loadPlayers();
+  else { const d = await res.json(); alert(d.error); }
+}
+
+async function deleteAlias(playerId, aliasId) {
+  if (!confirm('Remove this alias?')) return;
+  const res = await fetch(`/api/admin/players/${playerId}/aliases/${aliasId}`, { method: 'DELETE' });
+  if (res.ok) loadPlayers();
+}
+
+async function splitAlias(playerId, aliasId) {
+  const player = allPlayers.find(p => p.id === playerId);
+  const alias = player.aliases.find(a => a.id === aliasId);
+  if (!confirm(`Break out "${alias.alias}" as a separate player?\n\nAll match stats recorded under the name "${alias.alias}" will be moved to a new player account. This cannot be undone.`)) return;
+  const res = await fetch(`/api/admin/players/${playerId}/aliases/${aliasId}/split`, { method: 'POST' });
+  if (res.ok) loadPlayers();
+  else { const d = await res.json(); alert(d.error || 'Split failed'); }
+}
+
+async function deletePlayer(id) {
+  const player = allPlayers.find(p => p.id === id);
+  if (!confirm(`Delete "${player.display_name}"?\n\nThis player has no matches or aliases and will be permanently removed.`)) return;
+  const res = await fetch(`/api/admin/players/${id}`, { method: 'DELETE' });
+  if (res.ok) loadPlayers();
+  else { const d = await res.json(); alert(d.error); }
+}
+
+async function mergePlayers() {
+  const source_id = parseInt(document.getElementById('mergeSource').value);
+  const target_id = parseInt(document.getElementById('mergeTarget').value);
+  if (source_id === target_id) {
+    document.getElementById('mergeMsg').innerHTML = '<div class="alert alert-error">Source and target must be different.</div>';
+    return;
+  }
+  const src = allPlayers.find(p => p.id === source_id);
+  const tgt = allPlayers.find(p => p.id === target_id);
+  if (!confirm(`Merge "${src.display_name}" INTO "${tgt.display_name}"?\n\nThis will delete "${src.display_name}" and move all their data to "${tgt.display_name}".`)) return;
+  const res = await fetch('/api/admin/players/merge', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ source_id, target_id })
+  });
+  const data = await res.json();
+  if (res.ok) {
+    document.getElementById('mergeMsg').innerHTML = '<div class="alert alert-success">Players merged.</div>';
+    loadPlayers();
+  } else {
+    document.getElementById('mergeMsg').innerHTML = `<div class="alert alert-error">${data.error}</div>`;
+  }
+}
+
+checkAuth().then(loadPlayers);
+</script>
+</body>
+</html>

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Seasons — Admin</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<nav>
+  <span class="brand">Sunday Ladder</span>
+  <a href="/admin/dashboard">Dashboard</a>
+  <a href="/admin/import">Import</a>
+  <a href="/admin/weeks">Weeks</a>
+  <a href="/admin/seasons">Seasons</a>
+  <a href="/admin/players">Players</a>
+  <a href="/admin/settings">Settings</a>
+  <a href="/admin/security">Security</a>
+  <span class="nav-right">
+    <a href="/">Public</a>
+    <a href="#" onclick="logout()">Logout</a>
+  </span>
+</nav>
+<div class="content">
+  <h1>Seasons</h1>
+
+  <div class="card mb-2">
+    <h3>Create New Season</h3>
+    <div id="createMsg"></div>
+    <div class="form-row mt-1">
+      <div class="form-group">
+        <label for="newName">Season name</label>
+        <input type="text" id="newName" placeholder="e.g. Season 1">
+      </div>
+      <div class="form-group" style="flex:0">
+        <label>&nbsp;</label>
+        <button class="btn btn-success" onclick="createSeason()">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="list"><p class="loading">Loading…</p></div>
+</div>
+<script src="/admin/common.js"></script>
+<script>
+async function loadList() {
+  const seasons = await (await fetch('/api/admin/seasons')).json();
+  const rows = seasons.map(s => `
+    <tr>
+      <td>${s.name}</td>
+      <td>${s.status === 'active' ? '<span class="badge badge-green">Active</span>' : '<span class="badge badge-gray">Finished</span>'}</td>
+      <td class="num">${s.week_count}</td>
+      <td class="num">${s.match_count}</td>
+      <td>${s.created_at.split('T')[0]}</td>
+      <td>
+        ${s.status === 'active'
+          ? `<button class="btn btn-danger btn-sm" onclick="finishSeason(${s.id})">Finish season</button>`
+          : `<button class="btn btn-outline btn-sm" onclick="reactivateSeason(${s.id})">Re-activate</button>`}
+      </td>
+    </tr>`).join('');
+  document.getElementById('list').innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Name</th><th>Status</th><th class="num">Weeks</th><th class="num">Matches</th><th>Created</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="6" class="text-muted">No seasons yet.</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+async function createSeason() {
+  const name = document.getElementById('newName').value.trim();
+  if (!name) return;
+  const res = await fetch('/api/admin/seasons', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name })
+  });
+  const data = await res.json();
+  if (res.ok) {
+    document.getElementById('newName').value = '';
+    document.getElementById('createMsg').innerHTML = '<div class="alert alert-success">Season created.</div>';
+    loadList();
+  } else {
+    document.getElementById('createMsg').innerHTML = `<div class="alert alert-error">${data.error}</div>`;
+  }
+}
+
+async function finishSeason(id) {
+  if (!confirm('Mark this season as finished?')) return;
+  const res = await fetch(`/api/admin/seasons/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: 'finished' })
+  });
+  if (res.ok) loadList();
+}
+
+async function reactivateSeason(id) {
+  if (!confirm('Re-activate this season? Any currently active season will be marked as finished.')) return;
+  const res = await fetch(`/api/admin/seasons/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: 'active' })
+  });
+  if (res.ok) loadList();
+}
+
+checkAuth().then(loadList);
+</script>
+</body>
+</html>

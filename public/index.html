@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sunday Ladder</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0;
+      border-bottom: 2px solid #1a1a2e;
+      margin-bottom: 1.25rem;
+    }
+    .tab {
+      padding: .55rem 1.1rem;
+      cursor: pointer;
+      font-size: .9rem;
+      font-weight: 600;
+      color: #555;
+      background: #fff;
+      border-radius: 4px 4px 0 0;
+      transition: color .15s, background .15s;
+      white-space: nowrap;
+    }
+    .tab:hover { color: #1a1a2e; background: #f0f2f5; }
+    .tab.active { color: #fff; background: #1a1a2e; border-color: #1a1a2e; }
+    .trophy { cursor: default; font-style: normal; }
+    .history-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+      margin-top: .75rem;
+    }
+    .history-card {
+      background: #fff;
+      border-radius: 6px;
+      padding: 1rem 1.25rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    .history-card h4 { font-size: .95rem; color: #1a1a2e; margin-bottom: .6rem; }
+    .history-podium { list-style: none; padding: 0; margin: 0; }
+    .history-podium li { display: flex; align-items: center; gap: .5rem; padding: .2rem 0; font-size: .88rem; }
+    .podium-rank { font-weight: 700; color: #999; width: 1.2rem; text-align: center; flex-shrink: 0; }
+    .podium-rank.gold   { color: #f9a825; }
+    .podium-rank.silver { color: #90a4ae; }
+    .podium-rank.bronze { color: #a1887f; }
+    .podium-score { margin-left: auto; color: #555; font-size: .82rem; font-variant-numeric: tabular-nums; }
+    thead th { cursor: pointer; user-select: none; }
+    thead th:hover { background: #2a2a4e; }
+    thead th:first-child { cursor: default; }
+    thead th:first-child:hover { background: #1a1a2e; }
+  </style>
+</head>
+<body>
+<nav>
+  <span class="brand">Sunday Ladder</span>
+  <a href="/" class="active">Standings</a>
+  <a href="/history">History</a>
+  <span class="nav-right"><a href="/admin">Admin</a></span>
+</nav>
+<div class="content">
+  <div id="app"><p class="loading">Loading…</p></div>
+</div>
+<script>
+const fmt = (n, d=2) => (typeof n === 'number' && isFinite(n)) ? n.toFixed(d) : '—';
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+let currentSeason    = null;
+let currentWeeks     = [];
+let activeTab        = 'standings';
+let viewMode         = localStorage.getItem('standingsView') === 'raw' ? 'raw' : 'points';
+let currentStandings = [];
+let searchQuery      = '';
+let sortState        = { col: 'score', dir: -1 };
+let cachedWeekData   = {};
+let currentMinMatches = 0;
+
+function applyViewClass() {
+  document.body.classList.toggle('full-stats', viewMode === 'raw');
+}
+applyViewClass();
+
+function sortedData(data) {
+  if (!sortState.col) return data;
+  return [...data].sort((a, b) => {
+    const av = a[sortState.col], bv = b[sortState.col];
+    if (typeof av === 'string') return sortState.dir * av.localeCompare(bv);
+    return sortState.dir * ((av ?? -Infinity) - (bv ?? -Infinity));
+  });
+}
+
+function sortBy(col) {
+  if (sortState.col === col) sortState.dir *= -1;
+  else { sortState.col = col; sortState.dir = col === 'display_name' ? 1 : -1; }
+  refreshContent();
+}
+
+function refreshContent() {
+  const content = document.getElementById('tabContent');
+  if (!content) return;
+  const filtered = searchQuery
+    ? currentStandings.filter(p => p.display_name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : currentStandings;
+  const sorted = sortedData(filtered);
+  const scoreLabel = activeTab === 'standings' ? 'Final Score' : 'Weekly Score';
+  const minMatches = activeTab === 'standings' ? currentMinMatches : 0;
+  let html = searchBarHTML() + viewToggleHTML(minMatches) + tableBodyHTML(sorted, scoreLabel, minMatches);
+  if (activeTab !== 'standings') {
+    const weekId = activeTab.replace('week-', '');
+    if (cachedWeekData[weekId]) html += matchesHTML(cachedWeekData[weekId].matches);
+  }
+  content.innerHTML = html;
+}
+
+async function load() {
+  const { season, standings, min_matches } = await (await fetch('/api/standings')).json();
+
+  if (!season) {
+    document.getElementById('app').innerHTML = '<p class="text-muted">No active season yet.</p>';
+    return;
+  }
+
+  const { weeks } = await (await fetch(`/api/season/${season.id}/weeks`)).json();
+  currentSeason     = season;
+  currentWeeks      = weeks;
+  activeTab         = 'standings';
+  currentStandings  = standings;
+  currentMinMatches = min_matches || 0;
+  renderPage();
+}
+
+function renderTabs() {
+  const tabs = [
+    { id: 'standings', label: 'Standings' },
+    ...currentWeeks.map(w => ({ id: 'week-' + w.id, label: 'Week ' + w.week_number }))
+  ];
+  return `<div class="tabs">
+    ${tabs.map(t => `<div class="tab${activeTab === t.id ? ' active' : ''}" onclick="switchTab('${t.id}')">${t.label}</div>`).join('')}
+  </div>`;
+}
+
+function viewToggleHTML(minMatches) {
+  const notice = (activeTab === 'standings' && minMatches > 1)
+    ? `<span style="font-size:.83rem;color:#666">Minimum <strong>${minMatches}</strong> pugs required for a ranked position. Players below this threshold are grayed out.</span>`
+    : '';
+  return `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;gap:.4rem">
+    ${notice}
+    <div style="display:flex;gap:.4rem;margin-left:auto">
+      <button class="btn btn-sm ${viewMode==='points'?'btn-primary':'btn-outline'}" onclick="setView('points')">Points</button>
+      <button class="btn btn-sm ${viewMode==='raw'?'btn-primary':'btn-outline'}" onclick="setView('raw')">CTF Stats</button>
+    </div>
+  </div>`;
+}
+
+function setView(mode) {
+  viewMode = mode;
+  localStorage.setItem('standingsView', mode);
+  applyViewClass();
+  sortState = mode === 'points' ? { col: 'score', dir: -1 } : { col: 'total_caps', dir: -1 };
+  refreshContent();
+}
+
+function th(label, col, leftAlign = false, tooltip = '') {
+  const isActive = sortState.col === col;
+  const arrow = isActive ? (sortState.dir === -1 ? ' ▼' : ' ▲') : '';
+  const cls = leftAlign ? '' : ' class="num"';
+  const titleAttr = tooltip ? ` title="${tooltip}"` : '';
+  return `<th${cls}${titleAttr} onclick="sortBy('${col}')">${label}${arrow}</th>`;
+}
+
+function tableHeaders(scoreLabel) {
+  if (viewMode === 'points') {
+    return `<th class="num">#</th>
+      ${th('Player', 'display_name', true)}
+      ${th('Pugs', 'total_pugs', false, 'Pugs played')}
+      ${th('Total Pts', 'total_points', false, 'Total points earned')}
+      ${th('Avg Pts/Pug', 'avg_points_per_pug', false, 'Average points per pug')}
+      ${th('Part. Bonus', 'participation_bonus', false, 'Participation bonus (2.5 × √pugs)')}
+      ${th(scoreLabel, 'score', false, 'Final score = (total pts / pugs) + participation bonus')}`;
+  } else {
+    return `<th class="num">#</th>
+      ${th('Player', 'display_name', true)}
+      ${th('Pugs', 'total_pugs', false, 'Pugs played')}
+      ${th('D', 'draws', false, 'Draws')}
+      ${th('W', 'wins', false, 'Wins')}
+      ${th('W3', 'wins_by3', false, 'Wins by 3+ caps')}
+      ${th('W5', 'wins_by5', false, 'Wins by 5+ caps')}
+      ${th('L5', 'losses_by5', false, 'Losses by 5+ caps')}
+      ${th('Cap', 'total_caps', false, 'Flag captures')}
+      ${th('Ast', 'total_assists', false, 'Flag assists')}
+      ${th('Cov', 'total_covers', false, 'Flag covers')}
+      ${th('Kill', 'total_kills', false, 'Flag kills')}
+      ${th('Ret', 'total_returns', false, 'Flag returns')}
+      ${th('Seal', 'total_seals', false, 'Flag seals')}
+      ${th('CS', 'clean_sheets', false, 'Clean sheets (opponent capped 0)')}`;
+  }
+}
+
+function tableRow(p, rank, provisional = false) {
+  const pugs = p.total_pugs ?? p.pugs_played;
+  const cls = provisional ? ' class="provisional-row"' : '';
+  const rankCell = provisional ? '—' : rank;
+  if (viewMode === 'points') {
+    return `<tr${cls}>
+      <td class="rank">${rankCell}</td>
+      <td><a href="/player/${p.player_id}">${esc(p.display_name)}</a>${trophyHTML(p)}</td>
+      <td class="num">${pugs}</td>
+      <td class="num">${fmt(p.total_points)}</td>
+      <td class="num">${fmt(p.avg_points_per_pug)}</td>
+      <td class="num">${fmt(p.participation_bonus)}</td>
+      <td class="num"><strong>${fmt(p.score)}</strong></td>
+    </tr>`;
+  } else {
+    return `<tr${cls}>
+      <td class="rank">${rankCell}</td>
+      <td><a href="/player/${p.player_id}">${esc(p.display_name)}</a>${trophyHTML(p)}</td>
+      <td class="num">${pugs}</td>
+      <td class="num">${p.draws}</td>
+      <td class="num">${p.wins}</td>
+      <td class="num">${p.wins_by3}</td>
+      <td class="num">${p.wins_by5}</td>
+      <td class="num">${p.losses_by5}</td>
+      <td class="num">${p.total_caps}</td>
+      <td class="num">${p.total_assists}</td>
+      <td class="num">${p.total_covers}</td>
+      <td class="num">${p.total_kills}</td>
+      <td class="num">${p.total_returns}</td>
+      <td class="num">${p.total_seals}</td>
+      <td class="num">${p.clean_sheets}</td>
+    </tr>`;
+  }
+}
+
+function trophyHTML(p) {
+  if (!p.season_wins || p.season_wins.length === 0) return '';
+  const label = p.season_wins.length === 1
+    ? `Winner of ${p.season_wins[0]}`
+    : `Winner of ${p.season_wins.join(', ')}`;
+  return ` <span class="trophy" title="${esc(label)}">🏆</span>`;
+}
+
+function searchBarHTML() {
+  return `<div style="margin-bottom:.75rem">
+    <input type="text" id="standingsSearch" placeholder="Search player…"
+      style="max-width:220px;padding:.38rem .65rem;font-size:.88rem;border:1px solid #ccc;border-radius:4px"
+      value="${esc(searchQuery)}" oninput="onSearch(this.value)">
+  </div>`;
+}
+
+function onSearch(val) {
+  searchQuery = val;
+  refreshContent();
+  const inp = document.getElementById('standingsSearch');
+  if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+}
+
+function provisionalDivider(minMatches) {
+  const colCount = viewMode === 'points' ? 7 : 15;
+  return `<tr class="provisional-divider"><td colspan="${colCount}"></td></tr>`;
+}
+
+function tableBodyHTML(data, scoreLabel, minMatches = 0) {
+  if (data.length === 0) return '<p class="text-muted">No players found.</p>';
+  const threshold = Math.round(minMatches);
+  if (threshold > 1) {
+    const qualified   = data.filter(p => (p.total_pugs ?? p.pugs_played) >= threshold);
+    const provisional = data.filter(p => (p.total_pugs ?? p.pugs_played) < threshold);
+    const qualRows  = qualified.map((p, i) => tableRow(p, i + 1)).join('');
+    const provRows  = provisional.map(p => tableRow(p, '—', true)).join('');
+    const divider   = provisional.length ? provisionalDivider(threshold) : '';
+    return `<div class="table-wrap"><table>
+      <thead><tr>${tableHeaders(scoreLabel)}</tr></thead>
+      <tbody>${qualRows}${divider}${provRows}</tbody>
+    </table></div>`;
+  }
+  const rows = data.map((p, i) => tableRow(p, i + 1)).join('');
+  return `<div class="table-wrap"><table>
+    <thead><tr>${tableHeaders(scoreLabel)}</tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+function matchesHTML(matches) {
+  if (!matches || !matches.length) return '';
+  const rows = matches.map(m => `
+    <tr>
+      <td>${m.match_date || '—'}</td>
+      <td><a href="/match/${m.id}">${esc(m.map || 'Unknown map')}</a></td>
+      <td>${esc(m.server || '—')}</td>
+      <td class="num"><span class="team-red">${m.red_score}</span> : <span class="team-blue">${m.blue_score}</span></td>
+    </tr>`).join('');
+  return `<h3>Matches (${matches.length})</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Date</th><th>Map</th><th>Server</th><th class="num">Score</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>`;
+}
+
+function renderPage() {
+  document.getElementById('app').innerHTML = `
+    <h1>${esc(currentSeason.name)} <span class="badge badge-green">Active</span></h1>
+    <div id="tabs">${renderTabs()}</div>
+    <div id="tabContent">${searchBarHTML() + viewToggleHTML(currentMinMatches) + tableBodyHTML(sortedData(currentStandings), 'Final Score', currentMinMatches)}</div>`;
+}
+
+async function switchTab(tabId) {
+  activeTab = tabId;
+  searchQuery = '';
+  document.querySelectorAll('.tab').forEach(el => {
+    el.classList.toggle('active', el.textContent.trim() === tabLabel(tabId));
+  });
+
+  if (tabId === 'standings') {
+    document.getElementById('tabContent').innerHTML = '<p class="loading">Loading…</p>';
+    const { standings, min_matches } = await (await fetch('/api/standings')).json();
+    currentStandings  = standings;
+    currentMinMatches = min_matches || 0;
+    refreshContent();
+  } else {
+    const weekId = tabId.replace('week-', '');
+    document.getElementById('tabContent').innerHTML = '<p class="loading">Loading…</p>';
+    const { standings, matches } = await (await fetch(`/api/week/${weekId}`)).json();
+    // normalize pugs_played → total_pugs for consistent sort key
+    const normalized = standings.map(p => ({ ...p, total_pugs: p.pugs_played ?? p.total_pugs }));
+    cachedWeekData[weekId] = { standings: normalized, matches };
+    currentStandings = normalized;
+    refreshContent();
+  }
+}
+
+function tabLabel(tabId) {
+  if (tabId === 'standings') return 'Standings';
+  const week = currentWeeks.find(w => w.id == tabId.replace('week-', ''));
+  return week ? 'Week ' + week.week_number : '';
+}
+
+load();
+</script>
+</body>
+</html>
