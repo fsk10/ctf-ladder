@@ -279,4 +279,9 @@ router.get('/match/:id', (req, res) => {
   res.json({ match, stats: statsWithBreakdown, prevMatch, nextMatch });
 });
 
+// GET /api/scoring-settings  (public, read-only)
+router.get('/scoring-settings', (req, res) => {
+  res.json(getSettings(getDb()));
+});
+
 module.exports = router;
