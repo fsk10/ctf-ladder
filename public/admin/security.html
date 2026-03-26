@@ -25,6 +25,14 @@
   <h1>Security</h1>
   <div id="msg"></div>
 
+  <div class="card mb-2" style="border-color:#b71c1c">
+    <h3 style="color:#c62828">Danger Zone</h3>
+    <p class="text-muted mt-1" style="font-size:.85rem">Permanently deletes all seasons, weeks, matches, stats, and players. Scoring settings and login logs are kept. This cannot be undone.</p>
+    <div class="mt-1">
+      <button class="btn btn-danger" onclick="wipeData()">Wipe all data</button>
+    </div>
+  </div>
+
   <div class="card mb-2" id="suspiciousCard">
     <div style="display:flex;justify-content:space-between;align-items:center">
       <h3>Suspicious IPs <span class="text-muted" style="font-size:.8rem;font-weight:400">(3+ failed logins in last 7 days)</span></h3>
@@ -81,6 +89,19 @@ async function load() {
           <tbody>${rows}</tbody>
         </table>
       </div>`;
+  }
+}
+
+async function wipeData() {
+  if (!confirm('This will permanently delete ALL seasons, weeks, matches, player stats, and players.\n\nType "wipe" to confirm.') ) return;
+  const input = prompt('Type "wipe" to confirm:');
+  if (input !== 'wipe') return;
+  const res = await fetch('/api/admin/wipe', { method: 'DELETE' });
+  if (res.ok) {
+    document.getElementById('msg').innerHTML = '<div class="alert alert-success mb-2">All data wiped.</div>';
+  } else {
+    const data = await res.json();
+    document.getElementById('msg').innerHTML = `<div class="alert alert-error mb-2">${data.error}</div>`;
   }
 }
 

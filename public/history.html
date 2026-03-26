@@ -58,6 +58,13 @@
 <script>
 const fmt = (n, d=2) => (typeof n === 'number' && isFinite(n)) ? n.toFixed(d) : '—';
 const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const fmtDate = s => s ? new Date(s).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : null;
+const dateRange = s => {
+  const a = fmtDate(s.started_at), b = fmtDate(s.ended_at);
+  if (a && b) return `${a} - ${b}`;
+  if (a) return `From ${a}`;
+  return null;
+};
 
 let allHistory = [];
 let currentStandings = [];
@@ -261,11 +268,12 @@ function renderSeasonContent(season) {
   const second = standings[1];
   const third  = standings[2];
 
+  const range = dateRange(season);
   const winnerHTML = winner ? `
     <div class="winner-card">
       <div class="winner-trophy">🏆</div>
       <div class="winner-info">
-        <div class="winner-label">Season Winner</div>
+        <div class="winner-label">Season Winner${range ? ` &nbsp;·&nbsp; <span style="font-weight:400;letter-spacing:0">${range}</span>` : ''}</div>
         <div class="winner-name"><a href="/player/${winner.player_id}">${esc(winner.display_name)}</a></div>
         <div class="winner-score">Final Score: <strong>${fmt(winner.score)}</strong> &nbsp;·&nbsp; ${winner.total_pugs} pugs &nbsp;·&nbsp; ${fmt(winner.total_points)} pts</div>
       </div>
