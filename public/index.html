@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Sunday Ladder</title>
   <link rel="stylesheet" href="/css/style.css">
+  <link rel="icon" href="/playunreal.webp" type="image/webp">
   <style>
     .tabs {
       display: flex;
@@ -51,42 +52,11 @@
     thead th:hover { background: #2a2a4e; }
     thead th:first-child { cursor: default; }
     thead th:first-child:hover { background: #1a1a2e; }
-    .modal-overlay {
-      display: none; position: fixed; inset: 0;
-      background: rgba(0,0,0,.5); z-index: 1000;
-      align-items: center; justify-content: center;
-      padding: 1rem; overflow-y: auto;
-    }
-    .modal-overlay.open { display: flex; }
-    .modal {
-      background: #fff; border-radius: 8px;
-      max-width: 800px; width: 100%;
-      padding: 1.5rem; position: relative;
-      max-height: calc(100vh - 2rem); overflow-y: auto;
-    }
-    .modal h2 { margin: 0 0 .5rem; }
-    .modal h3 { margin: 1rem 0 .35rem; font-size: 1rem; color: #1a1a2e; }
-    .modal p  { color: #444; line-height: 1.5; margin-bottom: .5rem; }
-    .modal table { width: 100%; border-collapse: collapse; font-size: .88rem; }
-    .modal table th { background: #1a1a2e; color: #fff; padding: .35rem .7rem; text-align: left; }
-    .modal table td { padding: .28rem .7rem; border-bottom: 1px solid #eee; }
-    .modal table tr:last-child td { border-bottom: none; }
-    .modal-close {
-      position: absolute; top: 1rem; right: 1rem;
-      background: none; border: none; font-size: 1.4rem;
-      cursor: pointer; color: #888; line-height: 1;
-    }
-    .modal-close:hover { color: #222; }
-    .formula-box {
-      background: #f5f5f5; border-radius: 4px;
-      padding: .5rem 1rem; font-family: monospace;
-      font-size: .92rem; margin: .35rem 0 .5rem;
-    }
   </style>
 </head>
 <body>
 <nav>
-  <span class="brand">Sunday Ladder</span>
+  <span class="brand"><img src="/playunreal.webp" style="height:2.2rem;vertical-align:middle;margin-right:.5rem;opacity:.9">Sunday Ladder</span>
   <a href="/" class="active">Standings</a>
   <a href="/history">History</a>
   <span class="nav-right">
@@ -95,36 +65,6 @@
   </span>
 </nav>
 
-<div class="modal-overlay" id="aboutModal" onclick="if(event.target===this)closeAbout()">
-  <div class="modal">
-    <button class="modal-close" onclick="closeAbout()">✕</button>
-    <h2>About Sunday Ladder</h2>
-    <p>
-      Sunday Ladder is a seasonal pickup game (pug) competition for Unreal Tournament CTF.
-      Each season consists of multiple weeks where players compete in matches tracked via UTStats.
-    </p>
-    <p>
-      The scoring system is designed to <strong>reward participation and pure CTF teamwork</strong>:
-      capping, returning, covering and sealing, rather than favoring highly skilled players
-      who play infrequently. Scores are normalized per match played and combined with a
-      participation bonus to encourage activity throughout the season.
-    </p>
-
-    <h3>Match Points</h3>
-    <div id="aboutScoringTable"><p style="color:#999;font-size:.88rem">Loading…</p></div>
-
-    <h3>Score Formula</h3>
-    <div class="formula-box" id="aboutFormula">Loading…</div>
-    <p id="aboutFormulaDesc"></p>
-
-    <h3>Season Standings</h3>
-    <p>
-      Season standings aggregate all weeks (total points and total pugs played across the
-      entire season) and apply the formula once on those totals.
-      This means standings are <strong>not</strong> the sum of weekly scores.
-    </p>
-  </div>
-</div>
 <div class="content">
   <div id="app"><p class="loading">Loading…</p></div>
 </div>
@@ -403,62 +343,7 @@ function tabLabel(tabId) {
 
 load();
 
-let aboutSettings = null;
-
-async function openAbout() {
-  if (!aboutSettings) {
-    aboutSettings = await (await fetch('/api/scoring-settings')).json();
-    renderAbout(aboutSettings);
-  }
-  document.getElementById('aboutModal').classList.add('open');
-  document.body.style.overflow = 'hidden';
-}
-
-function closeAbout() {
-  document.getElementById('aboutModal').classList.remove('open');
-  document.body.style.overflow = '';
-}
-
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAbout(); });
-
-function renderAbout(s) {
-  const rows = [
-    ['Result', 'Draw',              `+${s.overall_draw}`],
-    ['Result', 'Win (margin 1-2)',  `+${s.overall_win}`],
-    ['Result', 'Win by ≥3 caps',    `+${s.overall_winBy3}`],
-    ['Result', 'Win by ≥5 caps',    `+${s.overall_winBy5}`],
-    ['Result', 'Loss by ≥5 caps',   `${s.overall_loseBy5}`],
-    ['Attacking', 'Per cap',                    `×${s.attacking_cap}`],
-    ['Attacking', 'Per 3 covers (continuous)',  `×${s.attacking_cover}`],
-    ['Attacking', 'Per assist',                 `×${s.attacking_assist}`],
-    ['Defending', 'Per 5 returns (continuous)', `×${s.defending_return}`],
-    ['Defending', 'Per 10 flag kills (continuous)', `×${s.defending_flagKill}`],
-    ['Defending', 'Per seal',                   `×${s.defending_seal}`],
-    ['Extra',     'Clean sheet (opponent = 0 caps)', `+${s.extra_cleanSheet}`],
-  ];
-
-  let lastCat = '';
-  const tableRows = rows.map(([cat, stat, pts]) => {
-    const catCell = cat !== lastCat ? `<td rowspan="${rows.filter(r=>r[0]===cat).length}" style="font-weight:600;vertical-align:top;padding-top:.5rem">${cat}</td>` : '';
-    if (cat !== lastCat) lastCat = cat;
-    return `<tr>${catCell}<td>${stat}</td><td style="text-align:right;font-weight:600">${pts}</td></tr>`;
-  }).join('');
-
-  document.getElementById('aboutScoringTable').innerHTML = `
-    <table>
-      <thead><tr><th>Category</th><th>Stat</th><th style="text-align:right">Points</th></tr></thead>
-      <tbody>${tableRows}</tbody>
-    </table>`;
-
-  const coeff = s.participation_bonus_coefficient;
-  document.getElementById('aboutFormula').textContent =
-    `score = (total_points / pugs_played) + ${coeff} × √(pugs_played)`;
-  document.getElementById('aboutFormulaDesc').innerHTML =
-    `The average points per pug normalizes for skill level, while the participation bonus
-    (<strong>${coeff} × √pugs</strong>) rewards players who keep showing up.
-    The square root means each additional match gives slightly less bonus than the last,
-    rewarding consistency without letting volume completely dominate.`;
-}
 </script>
+<script src="/js/about.js"></script>
 </body>
 </html>

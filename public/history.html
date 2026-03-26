@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Season History — Sunday Ladder</title>
   <link rel="stylesheet" href="/css/style.css">
+  <link rel="icon" href="/playunreal.webp" type="image/webp">
   <style>
     .winner-card {
       background: #1a1a2e;
@@ -46,10 +47,13 @@
 </head>
 <body>
 <nav>
-  <span class="brand">Sunday Ladder</span>
+  <span class="brand"><img src="/playunreal.webp" style="height:2.2rem;vertical-align:middle;margin-right:.5rem;opacity:.9">Sunday Ladder</span>
   <a href="/">Standings</a>
   <a href="/history" class="active">History</a>
-  <span class="nav-right"><a href="/admin">Admin</a></span>
+  <span class="nav-right">
+    <a href="#" onclick="openAbout();return false;">About</a>
+    <a href="/admin">Admin</a>
+  </span>
 </nav>
 <div class="content">
   <h1>Season History</h1>
@@ -97,7 +101,7 @@ function setView(mode) {
   viewMode = mode;
   localStorage.setItem('standingsView', mode);
   applyViewClass();
-  sortState = mode === 'points' ? { col: 'score', dir: -1 } : { col: 'total_caps', dir: -1 };
+  sortState = { col: 'score', dir: -1 };
   const toggle = document.getElementById('viewToggle');
   if (toggle) toggle.outerHTML = viewToggleHTML();
   const container = document.getElementById('standingsContainer');
@@ -299,5 +303,6 @@ function renderSeasonContent(season) {
 
 load();
 </script>
+<script src="/js/about.js"></script>
 </body>
 </html>

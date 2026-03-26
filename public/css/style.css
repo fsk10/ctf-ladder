@@ -13,7 +13,7 @@ a:hover { text-decoration: underline; }
 /* NAV */
 nav {
   background: #1a1a2e;
-  padding: 0 2rem;
+  padding: 0 1rem;
   display: flex;
   align-items: stretch;
   gap: 0;
@@ -282,6 +282,39 @@ dl.breakdown { display: grid; grid-template-columns: 1fr auto; gap: 0.2rem 1rem;
 /* SORTABLE TABLE HEADERS */
 thead th[onclick] { cursor: pointer; user-select: none; }
 thead th[onclick]:hover { background: #2a2a4e; }
+
+/* MODAL */
+.modal-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,.5); z-index: 1000;
+  align-items: center; justify-content: center;
+  padding: 1rem; overflow-y: auto;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: #fff; border-radius: 8px;
+  max-width: 800px; width: 100%;
+  padding: 1.5rem; position: relative;
+  max-height: calc(100vh - 2rem); overflow-y: auto;
+}
+.modal h2 { margin: 0 0 .5rem; }
+.modal h3 { margin: 1rem 0 .35rem; font-size: 1rem; color: #1a1a2e; }
+.modal p  { color: #444; line-height: 1.5; margin-bottom: .5rem; }
+.modal table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+.modal table th { background: #1a1a2e; color: #fff; padding: .35rem .7rem; text-align: left; }
+.modal table td { padding: .28rem .7rem; border-bottom: 1px solid #eee; }
+.modal table tr:last-child td { border-bottom: none; }
+.modal-close {
+  position: absolute; top: 1rem; right: 1rem;
+  background: none; border: none; font-size: 1.4rem;
+  cursor: pointer; color: #888; line-height: 1;
+}
+.modal-close:hover { color: #222; }
+.formula-box {
+  background: #f5f5f5; border-radius: 4px;
+  padding: .5rem 1rem; font-family: monospace;
+  font-size: .92rem; margin: .35rem 0 .5rem;
+}
 
 /* PROVISIONAL (below min matches threshold) */
 .provisional-row td { color: #bbb; background: #f9f9f9; }
