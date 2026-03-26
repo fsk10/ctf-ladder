@@ -27,7 +27,7 @@ function requireAuth(req, res, next) {
 // POST /api/admin/login
 router.post('/login', (req, res) => {
   const db = getDb();
-  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  const ip = req.headers['cf-connecting-ip'] || req.ip || req.socket.remoteAddress || 'unknown';
 
   // Rate limit: block if too many recent failures from this IP
   const { count: recentFails } = db.prepare(`
