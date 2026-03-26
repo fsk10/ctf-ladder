@@ -3,7 +3,7 @@ const router  = express.Router();
 const path    = require('path');
 const crypto  = require('crypto');
 const { getDb } = require('../db/database');
-const { getSettings, calculateMatchPoints, DEFAULT_SETTINGS } = require('../lib/scoring');
+const { getSettings, getSeasonSettings, calculateMatchPoints, DEFAULT_SETTINGS } = require('../lib/scoring');
 
 const DB_PATH    = path.join(__dirname, '..', 'db', 'sunday-ladder.db');
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
@@ -85,7 +85,16 @@ router.post('/seasons', requireAuth, (req, res) => {
   if (!name?.trim()) return res.status(400).json({ error: 'Name required' });
   try {
     const r = db.prepare('INSERT INTO seasons (name) VALUES (?)').run(name.trim());
-    res.json(db.prepare('SELECT * FROM seasons WHERE id = ?').get(r.lastInsertRowid));
+    const seasonId = r.lastInsertRowid;
+    // Copy current global settings as this season's settings
+    const currentSettings = getSettings(db);
+    const upsert = db.prepare('INSERT OR REPLACE INTO season_scoring_settings (season_id, key, value) VALUES (?, ?, ?)');
+    db.transaction(() => {
+      for (const [k, v] of Object.entries(currentSettings)) {
+        if (k in DEFAULT_SETTINGS) upsert.run(seasonId, k, v);
+      }
+    })();
+    res.json(db.prepare('SELECT * FROM seasons WHERE id = ?').get(seasonId));
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
@@ -97,11 +106,12 @@ router.put('/seasons/:id', requireAuth, (req, res) => {
   if (!season) return res.status(404).json({ error: 'Season not found' });
   const { status, name } = req.body;
   if (status) {
-    // When activating a season, finish any other active season first
     if (status === 'active') {
-      db.prepare("UPDATE seasons SET status = 'finished' WHERE status = 'active' AND id != ?").run(season.id);
+      db.prepare("UPDATE seasons SET status = 'finished', ended_at = datetime('now') WHERE status = 'active' AND id != ?").run(season.id);
+      db.prepare("UPDATE seasons SET status = 'active', ended_at = NULL WHERE id = ?").run(season.id);
+    } else if (status === 'finished') {
+      db.prepare("UPDATE seasons SET status = 'finished', ended_at = datetime('now') WHERE id = ?").run(season.id);
     }
-    db.prepare('UPDATE seasons SET status = ? WHERE id = ?').run(status, season.id);
   }
   if (name?.trim()) db.prepare('UPDATE seasons SET name = ? WHERE id = ?').run(name.trim(), season.id);
   res.json(db.prepare('SELECT * FROM seasons WHERE id = ?').get(season.id));
@@ -490,25 +500,40 @@ router.post('/players/merge', requireAuth, (req, res) => {
 // ===== SCORING SETTINGS =====
 
 router.get('/scoring-settings', requireAuth, (req, res) => {
-  res.json(getSettings(getDb()));
+  const db = getDb();
+  const active = db.prepare("SELECT id FROM seasons WHERE status='active' ORDER BY id DESC LIMIT 1").get();
+  res.json(active ? getSeasonSettings(db, active.id) : getSettings(db));
 });
 
 router.post('/scoring-settings', requireAuth, (req, res) => {
   const db = getDb();
-  const upsert = db.prepare('INSERT OR REPLACE INTO scoring_settings (key, value) VALUES (?, ?)');
+  const active = db.prepare("SELECT id FROM seasons WHERE status='active' ORDER BY id DESC LIMIT 1").get();
+  const upsertGlobal = db.prepare('INSERT OR REPLACE INTO scoring_settings (key, value) VALUES (?, ?)');
+  const upsertSeason = active
+    ? db.prepare('INSERT OR REPLACE INTO season_scoring_settings (season_id, key, value) VALUES (?, ?, ?)')
+    : null;
   db.transaction(() => {
     for (const [k, v] of Object.entries(req.body)) {
-      if (k in DEFAULT_SETTINGS) upsert.run(k, parseFloat(v));
+      if (k in DEFAULT_SETTINGS) {
+        upsertGlobal.run(k, parseFloat(v));
+        if (upsertSeason) upsertSeason.run(active.id, k, parseFloat(v));
+      }
     }
   })();
-  res.json(getSettings(db));
+  res.json(active ? getSeasonSettings(db, active.id) : getSettings(db));
 });
 
-// POST /api/admin/recalculate-points
+// POST /api/admin/recalculate-points — only recalculates the active season
 router.post('/recalculate-points', requireAuth, (req, res) => {
   const db = getDb();
-  const settings = getSettings(db);
-  const matches = db.prepare('SELECT * FROM matches').all();
+  const active = db.prepare("SELECT id FROM seasons WHERE status='active' ORDER BY id DESC LIMIT 1").get();
+  if (!active) return res.status(400).json({ error: 'No active season to recalculate.' });
+  const settings = getSeasonSettings(db, active.id);
+  const matches = db.prepare(`
+    SELECT m.* FROM matches m
+    JOIN weeks w ON w.id = m.week_id
+    WHERE w.season_id = ?
+  `).all(active.id);
   const updateStat = db.prepare('UPDATE match_stats SET total_points = ? WHERE id = ?');
   let updated = 0;
   db.transaction(() => {
@@ -526,11 +551,18 @@ router.post('/recalculate-points', requireAuth, (req, res) => {
 
 router.post('/scoring-settings/reset', requireAuth, (req, res) => {
   const db = getDb();
-  const upsert = db.prepare('INSERT OR REPLACE INTO scoring_settings (key, value) VALUES (?, ?)');
+  const active = db.prepare("SELECT id FROM seasons WHERE status='active' ORDER BY id DESC LIMIT 1").get();
+  const upsertGlobal = db.prepare('INSERT OR REPLACE INTO scoring_settings (key, value) VALUES (?, ?)');
+  const upsertSeason = active
+    ? db.prepare('INSERT OR REPLACE INTO season_scoring_settings (season_id, key, value) VALUES (?, ?, ?)')
+    : null;
   db.transaction(() => {
-    for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) upsert.run(k, v);
+    for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) {
+      upsertGlobal.run(k, v);
+      if (upsertSeason) upsertSeason.run(active.id, k, v);
+    }
   })();
-  res.json(getSettings(db));
+  res.json(active ? getSeasonSettings(db, active.id) : getSettings(db));
 });
 
 // GET /api/admin/login-attempts
@@ -573,6 +605,21 @@ router.delete('/login-attempts', requireAuth, (req, res) => {
   const db = getDb();
   const { changes } = db.prepare("DELETE FROM login_attempts WHERE attempted_at < datetime('now', '-30 days')").run();
   res.json({ deleted: changes });
+});
+
+// DELETE /api/admin/wipe  — delete all match data (seasons, weeks, matches, stats, players)
+router.delete('/wipe', requireAuth, (req, res) => {
+  const db = getDb();
+  db.transaction(() => {
+    db.exec('DELETE FROM match_stats');
+    db.exec('DELETE FROM matches');
+    db.exec('DELETE FROM weeks');
+    db.exec('DELETE FROM season_scoring_settings');
+    db.exec('DELETE FROM seasons');
+    db.exec('DELETE FROM player_aliases');
+    db.exec('DELETE FROM players');
+  })();
+  res.json({ ok: true });
 });
 
 // GET /api/admin/backup  — download a consistent hot backup of the SQLite database

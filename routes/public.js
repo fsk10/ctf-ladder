@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getDb } = require('../db/database');
-const { getSettings, calculateScore, getMatchBreakdown } = require('../lib/scoring');
+const { getSettings, getSeasonSettings, calculateScore, getMatchBreakdown } = require('../lib/scoring');
 
 // Helper: returns { player_id -> [season_name, ...] } for all finished seasons
 function getSeasonWinnerMap(db, coefficient = 2.5) {
@@ -35,7 +35,7 @@ router.get('/standings', (req, res) => {
     : db.prepare("SELECT * FROM seasons WHERE status='active' ORDER BY id DESC LIMIT 1").get();
   if (!season) return res.json({ season: null, standings: [] });
 
-  const settings = getSettings(db);
+  const settings = getSeasonSettings(db, season.id);
   const winners = getSeasonWinnerMap(db, settings.participation_bonus_coefficient);
 
   const rows = db.prepare(`
@@ -82,9 +82,9 @@ router.get('/seasons', (req, res) => {
 // GET /api/season-history  — finished seasons with top 3 per season
 router.get('/season-history', (req, res) => {
   const db = getDb();
-  const settings = getSettings(db);
   const finished = db.prepare("SELECT * FROM seasons WHERE status='finished' ORDER BY id DESC").all();
   const history = finished.map(s => {
+    const sSettings = getSeasonSettings(db, s.id);
     const rows = db.prepare(`
       SELECT p.id AS player_id, p.display_name,
              COUNT(DISTINCT ms.match_id) AS pugs,
@@ -95,7 +95,7 @@ router.get('/season-history', (req, res) => {
       JOIN weeks w ON w.id = m.week_id
       WHERE w.season_id = ? GROUP BY p.id
     `).all(s.id);
-    const top3 = rows.map(r => ({ ...r, ...calculateScore(r.pts, r.pugs, settings.participation_bonus_coefficient) }))
+    const top3 = rows.map(r => ({ ...r, ...calculateScore(r.pts, r.pugs, sSettings.participation_bonus_coefficient) }))
                      .sort((a, b) => b.score - a.score)
                      .slice(0, 3);
     return { ...s, top3 };
@@ -152,14 +152,14 @@ router.get('/week/:id', (req, res) => {
     GROUP BY p.id
   `).all(week.id);
 
-  const settings = getSettings(db);
+  const settings = getSeasonSettings(db, week.season_id);
   const winners = getSeasonWinnerMap(db, settings.participation_bonus_coefficient);
   const standings = rows.map(r => {
     const s = calculateScore(r.total_points, r.pugs_played, settings.participation_bonus_coefficient);
     return { ...r, ...s, season_wins: winners[r.player_id] || [] };
   }).sort((a, b) => b.score - a.score);
 
-  const matches = db.prepare('SELECT * FROM matches WHERE week_id = ? ORDER BY id').all(week.id);
+  const matches = db.prepare("SELECT * FROM matches WHERE week_id = ? AND api_url NOT LIKE 'legacy://%' ORDER BY id").all(week.id);
 
   // Neighbour weeks for prev/next nav
   const allWeeks = db.prepare('SELECT id, week_number FROM weeks WHERE season_id = ? ORDER BY week_number').all(week.season_id);
@@ -177,7 +177,6 @@ router.get('/player/:id', (req, res) => {
   if (!player) return res.status(404).json({ error: 'Player not found' });
 
   const aliases = db.prepare('SELECT * FROM player_aliases WHERE player_id = ? ORDER BY last_seen DESC').all(player.id);
-  const settings = getSettings(db);
 
   // Season summaries (all seasons player has played)
   const seasonRows = db.prepare(`
@@ -193,7 +192,8 @@ router.get('/player/:id', (req, res) => {
   `).all(player.id);
 
   const seasonSummaries = seasonRows.map(r => {
-    const s = calculateScore(r.total_points, r.total_pugs, settings.participation_bonus_coefficient);
+    const sSettings = getSeasonSettings(db, r.season_id);
+    const s = calculateScore(r.total_points, r.total_pugs, sSettings.participation_bonus_coefficient);
     // Compute rank within this season
     const others = db.prepare(`
       SELECT COUNT(DISTINCT ms2.match_id) AS pugs, COALESCE(SUM(ms2.total_points), 0) AS pts
@@ -204,7 +204,7 @@ router.get('/player/:id', (req, res) => {
       WHERE w2.season_id = ? AND p2.id != ?
       GROUP BY p2.id
     `).all(r.season_id, player.id);
-    const rank = others.filter(o => calculateScore(o.pts, o.pugs, settings.participation_bonus_coefficient).score > s.score).length + 1;
+    const rank = others.filter(o => calculateScore(o.pts, o.pugs, sSettings.participation_bonus_coefficient).score > s.score).length + 1;
     return { ...r, ...s, rank };
   });
 
@@ -223,7 +223,8 @@ router.get('/player/:id', (req, res) => {
   `).all(player.id);
 
   const weeklyHistory = weekRows.map(r => {
-    const s = calculateScore(r.total_points, r.pugs_played, settings.participation_bonus_coefficient);
+    const sSettings = getSeasonSettings(db, r.season_id);
+    const s = calculateScore(r.total_points, r.pugs_played, sSettings.participation_bonus_coefficient);
     return { ...r, ...s };
   });
 
@@ -238,7 +239,7 @@ router.get('/player/:id', (req, res) => {
     JOIN matches m ON m.id = ms.match_id
     JOIN weeks w ON w.id = m.week_id
     JOIN seasons s ON s.id = w.season_id
-    WHERE ms.player_id = ?
+    WHERE ms.player_id = ? AND m.api_url NOT LIKE 'legacy://%'
     ORDER BY m.id DESC
   `).all(player.id);
 
@@ -257,7 +258,7 @@ router.get('/match/:id', (req, res) => {
   `).get(req.params.id);
   if (!match) return res.status(404).json({ error: 'Match not found' });
 
-  const settings = getSettings(db);
+  const settings = getSeasonSettings(db, match.season_id);
 
   const stats = db.prepare(`
     SELECT ms.*, p.display_name
@@ -281,7 +282,9 @@ router.get('/match/:id', (req, res) => {
 
 // GET /api/scoring-settings  (public, read-only)
 router.get('/scoring-settings', (req, res) => {
-  res.json(getSettings(getDb()));
+  const db = getDb();
+  const active = db.prepare("SELECT id FROM seasons WHERE status='active' ORDER BY id DESC LIMIT 1").get();
+  res.json(active ? getSeasonSettings(db, active.id) : getSettings(db));
 });
 
 module.exports = router;

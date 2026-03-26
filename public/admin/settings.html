@@ -23,10 +23,7 @@
 </nav>
 <div class="content">
   <h1>Scoring Settings</h1>
-  <div class="alert alert-warn mb-2">
-    Changing these values does <strong>not</strong> automatically update already imported matches.
-    Use the <strong>Recalculate</strong> button below to recompute all stored match points with the current settings.
-  </div>
+  <div id="seasonNote" class="alert alert-warn mb-2"></div>
   <form id="settingsForm" onsubmit="saveSettings(event)">
     <div class="grid-2">
       <div class="card">
@@ -97,7 +94,18 @@ function applySettings(settings) {
 }
 
 async function loadSettings() {
-  applySettings(await (await fetch('/api/admin/scoring-settings')).json());
+  const [settings, seasons] = await Promise.all([
+    (await fetch('/api/admin/scoring-settings')).json(),
+    (await fetch('/api/admin/seasons')).json()
+  ]);
+  const active = seasons.find(s => s.status === 'active');
+  const note = document.getElementById('seasonNote');
+  if (active) {
+    note.innerHTML = `Editing settings for <strong>${active.name}</strong> (active season). Changes are saved to this season and used as the template for future seasons. Use <strong>Recalculate</strong> to recompute stored match points for this season only.`;
+  } else {
+    note.innerHTML = 'No active season. Settings below are the <strong>global defaults</strong> and will be copied to the next season you create.';
+  }
+  applySettings(settings);
 }
 
 async function saveSettings(e) {
@@ -135,7 +143,7 @@ function showMsg(cls, text) {
 }
 
 async function recalculate() {
-  if (!confirm('Recalculate total_points for ALL imported matches using current settings?\n\nThis will overwrite stored point values.')) return;
+  if (!confirm('Recalculate match points for the active season using current settings?\n\nThis will overwrite stored point values for the active season only.')) return;
   const res = await fetch('/api/admin/recalculate-points', { method: 'POST' });
   const data = await res.json();
   if (res.ok) {

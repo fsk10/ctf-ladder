@@ -29,6 +29,8 @@ function initDatabase() {
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
       name       TEXT NOT NULL,
       status     TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','finished')),
+      started_at TEXT,
+      ended_at   TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -77,6 +79,13 @@ function initDatabase() {
       value REAL NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS season_scoring_settings (
+      season_id INTEGER NOT NULL REFERENCES seasons(id) ON DELETE CASCADE,
+      key       TEXT NOT NULL,
+      value     REAL NOT NULL,
+      PRIMARY KEY (season_id, key)
+    );
+
     CREATE TABLE IF NOT EXISTS login_attempts (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
       ip           TEXT NOT NULL,
@@ -85,6 +94,11 @@ function initDatabase() {
     );
     CREATE INDEX IF NOT EXISTS idx_login_attempts_ip_time ON login_attempts (ip, attempted_at);
   `);
+
+  // Migrations for existing databases
+  const cols = db.prepare("PRAGMA table_info(seasons)").all().map(c => c.name);
+  if (!cols.includes('started_at')) db.exec("ALTER TABLE seasons ADD COLUMN started_at TEXT");
+  if (!cols.includes('ended_at'))   db.exec("ALTER TABLE seasons ADD COLUMN ended_at TEXT");
 
   const insert = db.prepare('INSERT OR IGNORE INTO scoring_settings (key, value) VALUES (?, ?)');
   const seed = db.transaction(() => {
