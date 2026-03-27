@@ -1,4 +1,4 @@
-# Sunday Ladder
+# CTF Ladder
 
 A web application for tracking Unreal Tournament CTF pickup game (pug) statistics across a season. Rather than presenting raw stats, the scoring system is designed to reward participation and pure CTF team skills — capping, returning, covering, sealing — over individual fraggers or high-skill players who play infrequently. Scores are normalized per match played and combined with a participation bonus to encourage activity throughout the season.
 
@@ -28,8 +28,8 @@ Replaces a Google Sheets document with a full-stack app that automates all score
 ### Installation
 
 ```bash
-git clone https://github.com/fsk10/sundayladder.git
-cd sundayladder
+git clone https://github.com/fsk10/ctf-ladder.git
+cd ctf-ladder
 npm install --omit=dev
 ```
 
@@ -60,7 +60,7 @@ pm2 save
 ```bash
 git pull
 npm install --omit=dev
-pm2 restart sundayladder
+pm2 restart ctfladder
 ```
 
 ## Scoring

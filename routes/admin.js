@@ -5,7 +5,7 @@ const crypto  = require('crypto');
 const { getDb } = require('../db/database');
 const { getSettings, getSeasonSettings, calculateMatchPoints, DEFAULT_SETTINGS } = require('../lib/scoring');
 
-const DB_PATH    = path.join(__dirname, '..', 'db', 'sunday-ladder.db');
+const DB_PATH    = path.join(__dirname, '..', 'db', 'ctf-ladder.db');
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASS = process.env.ADMIN_PASS || 'changeme';
 
@@ -628,7 +628,7 @@ router.get('/backup', requireAuth, (req, res) => {
   const fs  = require('fs');
   const os  = require('os');
   const ts  = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const filename = `sunday-ladder-backup-${ts}.db`;
+  const filename = `ctf-ladder-backup-${ts}.db`;
   const destPath = path.join(os.tmpdir(), filename);
   // better-sqlite3 backup() gives a consistent snapshot safe for WAL mode
   db.backup(destPath)

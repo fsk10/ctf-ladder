@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Week — Sunday Ladder</title>
+  <title>Week — CTF Ladder</title>
   <link rel="stylesheet" href="/css/style.css">
   <link rel="icon" href="/playunreal.webp" type="image/webp">
   <style>
@@ -15,7 +15,7 @@
 </head>
 <body>
 <nav>
-  <span class="brand"><img src="/playunreal.webp" style="height:2.2rem;vertical-align:middle;margin-right:.5rem;opacity:.9">Sunday Ladder</span>
+  <span class="brand"><img src="/playunreal.webp" style="height:2.2rem;vertical-align:middle;margin-right:.5rem;opacity:.9">CTF Ladder</span>
   <a href="/">Standings</a>
   <a href="/history">History</a>
   <span class="nav-right"><a href="/admin">Admin</a></span>
@@ -156,7 +156,7 @@ async function load() {
   weekPageData = data;
 
   const { week, matches, prev, next } = data;
-  document.title = `Week ${week.week_number} — Sunday Ladder`;
+  document.title = `Week ${week.week_number} — CTF Ladder`;
 
   const matchRows = matches.map(m => `
     <tr>

@@ -5,10 +5,10 @@ const { initDatabase } = require('./db/database');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
-const SESSION_SECRET = process.env.SESSION_SECRET || 'sunday-ladder-dev-secret';
+const SESSION_SECRET = process.env.SESSION_SECRET || 'ctf-ladder-dev-secret';
 const IS_PROD = process.env.NODE_ENV === 'production';
 
-if (SESSION_SECRET === 'sunday-ladder-dev-secret' && IS_PROD) {
+if (SESSION_SECRET === 'ctf-ladder-dev-secret' && IS_PROD) {
   console.error('FATAL: SESSION_SECRET env var must be set in production.');
   process.exit(1);
 }
@@ -69,4 +69,4 @@ if (process.env.ENABLE_TEST_DATA === 'true') {
   app.use('/api/test', require('./routes/test'));
 }
 
-app.listen(PORT, () => console.log(`Sunday Ladder running at http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`CTF Ladder running at http://localhost:${PORT}`));

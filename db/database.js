@@ -2,7 +2,7 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const { DEFAULT_SETTINGS } = require('../lib/scoring');
 
-const DB_PATH = path.join(__dirname, 'sunday-ladder.db');
+const DB_PATH = path.join(__dirname, 'ctf-ladder.db');
 let db;
 
 function initDatabase() {

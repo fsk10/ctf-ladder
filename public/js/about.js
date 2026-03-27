@@ -5,9 +5,9 @@
 <div class="modal-overlay" id="aboutModal" onclick="if(event.target===this)closeAbout()">
   <div class="modal">
     <button class="modal-close" onclick="closeAbout()">&#x2715;</button>
-    <h2>About Sunday Ladder</h2>
+    <h2>About CTF Ladder</h2>
     <p>
-      Sunday Ladder is a seasonal pickup game (pug) competition for Unreal Tournament CTF.
+      CTF Ladder is a seasonal pickup game (pug) competition for Unreal Tournament CTF.
       Each season consists of multiple weeks where players compete in matches tracked via UTStats.
     </p>
     <p>

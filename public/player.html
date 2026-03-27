@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Player — Sunday Ladder</title>
+  <title>Player — CTF Ladder</title>
   <link rel="stylesheet" href="/css/style.css">
   <link rel="icon" href="/playunreal.webp" type="image/webp">
 </head>
 <body>
 <nav>
-  <span class="brand"><img src="/playunreal.webp" style="height:2.2rem;vertical-align:middle;margin-right:.5rem;opacity:.9">Sunday Ladder</span>
+  <span class="brand"><img src="/playunreal.webp" style="height:2.2rem;vertical-align:middle;margin-right:.5rem;opacity:.9">CTF Ladder</span>
   <a href="/">Standings</a>
   <a href="/history">History</a>
   <span class="nav-right"><a href="/admin">Admin</a></span>
@@ -28,7 +28,7 @@ async function load() {
   if (!res.ok) { document.getElementById('app').innerHTML = '<p class="alert alert-error">Player not found.</p>'; return; }
   const { player, aliases, seasonSummaries, weeklyHistory, matchHistory } = await res.json();
 
-  document.title = `${player.display_name} — Sunday Ladder`;
+  document.title = `${player.display_name} — CTF Ladder`;
 
   const aliasTags = aliases.map(a => `<span class="alias-tag">${esc(a.alias)}</span>`).join('');
 
