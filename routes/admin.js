@@ -305,9 +305,9 @@ router.post('/fetch-match-data', requireAuth, async (req, res) => {
     matchInfo: {
       red_score:  matchData.redTeamScore,
       blue_score: matchData.blueTeamScore,
-      map:        matchData.map       || null,
-      game_type:  matchData.gameType  || null,
-      server:     matchData.server    || null,
+      map:        matchData.map       || matchData.mapName      || null,
+      game_type:  matchData.gameType  || matchData.gametypeName || null,
+      server:     matchData.server    || matchData.serverName   || null,
       match_date: matchData.date      || null
     },
     players: resolved,
