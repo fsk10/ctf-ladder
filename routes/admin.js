@@ -245,12 +245,14 @@ router.post('/fetch-match-data', requireAuth, async (req, res) => {
   const { url } = req.body;
   if (!url?.trim()) return res.status(400).json({ error: 'URL required' });
 
-  const existing = db.prepare('SELECT id FROM matches WHERE api_url = ?').get(url.trim());
+  const normalizedUrl = /^https?:\/\//i.test(url.trim()) ? url.trim() : `https://${url.trim()}`;
+
+  const existing = db.prepare('SELECT id FROM matches WHERE api_url = ?').get(normalizedUrl);
   if (existing) return res.status(400).json({ error: 'This match has already been imported' });
 
   let matchData;
   try {
-    const response = await fetch(url.trim(), { signal: AbortSignal.timeout(10000) });
+    const response = await fetch(normalizedUrl, { signal: AbortSignal.timeout(10000) });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     matchData = await response.json();
   } catch (e) {
@@ -302,6 +304,7 @@ router.post('/fetch-match-data', requireAuth, async (req, res) => {
   const allPlayers = db.prepare('SELECT id, display_name FROM players ORDER BY display_name COLLATE NOCASE').all();
 
   res.json({
+    url: normalizedUrl,
     matchInfo: {
       red_score:  matchData.redTeamScore,
       blue_score: matchData.blueTeamScore,

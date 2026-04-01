@@ -187,6 +187,7 @@ async function processNext() {
     return;
   }
 
+  if (data.url) queue[queueIndex].url = data.url;
   fetchedData = data;
   allPlayers = data.allPlayers;
 
