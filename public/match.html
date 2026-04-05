@@ -20,6 +20,7 @@
 <script>
 const fmt = (n, d=2) => (typeof n === 'number' && isFinite(n)) ? n.toFixed(d) : '—';
 const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const fmtDate = iso => { if (!iso) return '—'; const d = new Date(iso), p = n => String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
 
 const id = window.location.pathname.split('/').pop();
 
@@ -102,7 +103,7 @@ async function load() {
 
     <div class="card flex mb-2" style="flex-wrap:wrap;gap:1.5rem">
       <div>${match.server ? `<strong>Server:</strong> ${esc(match.server)}` : ''}</div>
-      <div>${match.match_date ? `<strong>Date:</strong> ${match.match_date}` : ''}</div>
+      <div>${match.match_date ? `<strong>Date:</strong> ${fmtDate(match.match_date)}` : ''}</div>
       <div>${match.game_type ? `<strong>Type:</strong> ${esc(match.game_type)}` : ''}</div>
     </div>
 
