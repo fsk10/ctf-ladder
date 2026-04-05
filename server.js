@@ -1,5 +1,7 @@
 const express = require('express');
 const session = require('express-session');
+const SqliteStore = require('better-sqlite3-session-store')(session);
+const Database = require('better-sqlite3');
 const path = require('path');
 const { initDatabase } = require('./db/database');
 
@@ -31,6 +33,7 @@ app.use((req, res, next) => {
 });
 
 app.use(session({
+  store: new SqliteStore({ client: new Database(path.join(__dirname, 'db', 'ctf-ladder.db')) }),
   secret: SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
