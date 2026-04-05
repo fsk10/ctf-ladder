@@ -210,7 +210,7 @@ router.get('/matches', requireAuth, (req, res) => {
   `;
   const params = [];
   if (week_id) { sql += ' WHERE m.week_id = ?'; params.push(week_id); }
-  sql += ' GROUP BY m.id ORDER BY m.id DESC';
+  sql += ' GROUP BY m.id ORDER BY m.match_date DESC, m.id DESC';
   res.json(db.prepare(sql).all(...params));
 });
 
