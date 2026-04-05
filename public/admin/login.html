@@ -20,28 +20,33 @@
   <h1>CTF Ladder<br><span style="font-size:1rem;color:#888;font-weight:400">Admin Login</span></h1>
   <div class="card">
     <div id="err"></div>
-    <div class="form-group">
-      <label for="username">Username</label>
-      <input type="text" id="username" autocomplete="username">
-    </div>
-    <div class="form-group">
-      <label for="password">Password</label>
-      <input type="password" id="password" autocomplete="current-password">
-    </div>
-    <button class="btn btn-primary" style="width:100%" onclick="login()">Login</button>
+    <form id="loginForm" onsubmit="login(); return false;" autocomplete="on">
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" autocomplete="current-password">
+      </div>
+      <div class="form-group" style="display:flex;align-items:center;gap:.5rem;margin-bottom:1rem">
+        <input type="checkbox" id="remember" name="remember" style="width:auto;margin:0">
+        <label for="remember" style="margin:0;font-weight:400;cursor:pointer">Remember me</label>
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%">Login</button>
+    </form>
   </div>
   <p style="text-align:center;margin-top:1rem"><a href="/">← Public site</a></p>
 </div>
 <script>
-document.getElementById('password').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
-
 async function login() {
   const username = document.getElementById('username').value;
   const password = document.getElementById('password').value;
+  const remember = document.getElementById('remember').checked;
   const res = await fetch('/api/admin/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password })
+    body: JSON.stringify({ username, password, remember })
   });
   const data = await res.json();
   if (data.success) {
