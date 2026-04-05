@@ -83,6 +83,7 @@ async function loadSeasons() {
 }
 
 const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const fmtDate = iso => { if (!iso) return '—'; const d = new Date(iso), p = n => String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
 
 async function onSeasonFilterChange() {
   const seasonId = document.getElementById('filterSeason').value;
@@ -117,16 +118,17 @@ async function loadList() {
             <a href="/match/${m.id}">${esc(m.map || 'Unknown map')}</a>
           </label>
         </td>
+        <td></td>
         <td><span class="team-red">${m.red_score}</span> : <span class="team-blue">${m.blue_score}</span></td>
         <td class="num">${m.player_count} players</td>
-        <td class="text-muted" style="font-size:.8rem">${m.imported_at ? m.imported_at.replace('T',' ').slice(0,16) : '—'}</td>
+        <td class="text-muted" style="font-size:.8rem">${fmtDate(m.match_date)}</td>
         <td>
           <button class="btn btn-outline btn-sm" onclick="editMatch(${m.id})">Edit</button>
           <button class="btn btn-danger btn-sm" onclick="deleteMatch(${m.id})">Delete</button>
         </td>
       </tr>
       <tr id="match-edit-${m.id}" style="display:none;background:#edf3ff">
-        <td colspan="6" style="padding:.75rem 1rem">
+        <td colspan="7" style="padding:.75rem 1rem">
           <div class="form-row">
             <div class="form-group"><label>Map</label><input type="text" id="em-map-${m.id}" value="${esc(m.map||'')}"></div>
             <div class="form-group"><label>Server</label><input type="text" id="em-server-${m.id}" value="${esc(m.server||'')}"></div>
@@ -146,8 +148,9 @@ async function loadList() {
         ${w.match_count > 0 ? `<input type="checkbox" id="sel-all-${w.id}" onchange="toggleSelectAll(${w.id}, this.checked)" style="margin-right:.5rem;cursor:pointer">` : ''}Week ${w.week_number}
       </td>
       <td>${w.week_date || '—'}</td>
+      <td></td>
       <td class="num">${w.match_count}</td>
-      <td>${w.created_at.split('T')[0]}</td>
+      <td>—</td>
       <td style="white-space:nowrap">
         <a href="/admin/import?week_id=${w.id}" class="btn btn-primary btn-sm">Import</a>
         <button class="btn btn-outline btn-sm" onclick="editWeek(${w.id}, ${w.week_number}, '${w.week_date||''}')">Edit</button>
@@ -157,7 +160,7 @@ async function loadList() {
       </td>
     </tr>
     <tr id="week-edit-${w.id}" style="display:none;background:#edf3ff">
-      <td colspan="6" style="padding:.75rem 1rem">
+      <td colspan="7" style="padding:.75rem 1rem">
         <div class="form-row">
           <div class="form-group"><label>Week number</label><input type="number" id="ew-num-${w.id}" value="${w.week_number}" style="width:80px"></div>
           <div class="form-group"><label>Date</label><input type="date" id="ew-date-${w.id}" value="${w.week_date||''}"></div>
@@ -174,8 +177,8 @@ async function loadList() {
   document.getElementById('list').innerHTML = `
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Season</th><th>Week</th><th>Date</th><th class="num" style="width:120px">Matches</th><th>Created</th><th style="width:1px"></th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="6" class="text-muted">No weeks.</td></tr>'}</tbody>
+        <thead><tr><th>Season</th><th>Week</th><th>Week Date</th><th class="num" style="width:80px">Score</th><th class="num" style="width:120px">Matches</th><th>Played</th><th style="width:1px"></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="7" class="text-muted">No weeks.</td></tr>'}</tbody>
       </table>
     </div>`;
 }
