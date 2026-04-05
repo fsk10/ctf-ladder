@@ -40,13 +40,14 @@ router.post('/login', (req, res) => {
     return res.status(429).json({ error: `Too many failed attempts. Try again in ${RATE_LIMIT_WINDOW_MINUTES} minutes.` });
   }
 
-  const { username = '', password = '' } = req.body;
+  const { username = '', password = '', remember = false } = req.body;
   const success = safeEqual(username, ADMIN_USER) && safeEqual(password, ADMIN_PASS);
 
   db.prepare('INSERT INTO login_attempts (ip, success) VALUES (?, ?)').run(ip, success ? 1 : 0);
 
   if (success) {
     req.session.admin = true;
+    if (remember) req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000; // 30 days
     res.json({ success: true });
   } else {
     res.status(401).json({ error: 'Invalid credentials' });
@@ -152,7 +153,7 @@ router.get('/weeks', requireAuth, (req, res) => {
   `;
   const params = [];
   if (season_id) { sql += ' WHERE w.season_id = ?'; params.push(season_id); }
-  sql += ' GROUP BY w.id ORDER BY s.id DESC, w.week_number';
+  sql += ' GROUP BY w.id ORDER BY s.id DESC, w.week_number DESC';
   res.json(db.prepare(sql).all(...params));
 });
 
