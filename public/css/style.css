@@ -237,6 +237,7 @@ input:focus, select:focus, textarea:focus {
 .mb-2 { margin-bottom: 1rem; }
 
 /* RESOLVE TABLE (import) */
+.resolve-table th, .resolve-table td { padding: .4rem .7rem; font-size: .88rem; }
 .resolve-table select, .resolve-table input[type=text] {
   width: auto;
   min-width: 160px;
@@ -245,6 +246,18 @@ input:focus, select:focus, textarea:focus {
 }
 .status-ok      { color: #2e7d32; font-weight: 700; }
 .status-unknown { color: #e65100; font-weight: 700; }
+.stat-cell { color: #555; font-size: .82rem; }
+
+/* IMPORT QUEUE */
+#queueList { list-style: none; padding: 0; margin: .5rem 0 0; }
+#queueList li { padding: .3rem .6rem; border-radius: 3px; font-size: .83rem; margin-bottom: .25rem; display: flex; align-items: center; gap: .5rem; }
+.q-pending { background: #f5f5f5; color: #555; }
+.q-active  { background: #e3f2fd; color: #0d47a1; font-weight: 600; }
+.q-done    { background: #e8f5e9; color: #2e7d32; }
+.q-skipped { background: #fff8e1; color: #e65100; }
+.q-error   { background: #ffebee; color: #b71c1c; }
+.q-icon    { font-size: 1rem; flex-shrink: 0; }
+.q-url     { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: monospace; }
 
 /* BREAKDOWN LIST */
 .breakdown dt { color: #666; font-size: 0.82rem; }
@@ -315,6 +328,50 @@ thead th[onclick]:hover { background: #2a2a4e; }
   padding: .5rem 1rem; font-family: monospace;
   font-size: .92rem; margin: .35rem 0 .5rem;
 }
+
+/* TABS */
+.tabs { display: flex; flex-wrap: wrap; gap: 0; border-bottom: 2px solid #1a1a2e; margin-bottom: 1.25rem; }
+.tab { padding: .55rem 1.1rem; cursor: pointer; font-size: .9rem; font-weight: 600; color: #555; background: #fff; border-radius: 4px 4px 0 0; transition: color .15s, background .15s; white-space: nowrap; }
+.tab:hover { color: #1a1a2e; background: #f0f2f5; }
+.tab.active { color: #fff; background: #1a1a2e; border-color: #1a1a2e; }
+
+/* TROPHY */
+.trophy { cursor: default; font-style: normal; font-size: 1.2em; }
+
+/* HISTORY MINI-CARDS (standings page) */
+.history-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; margin-top: .75rem; }
+.history-card { background: #fff; border-radius: 6px; padding: 1rem 1.25rem; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+.history-card h4 { font-size: .95rem; color: #1a1a2e; margin-bottom: .6rem; }
+.history-podium { list-style: none; padding: 0; margin: 0; }
+.history-podium li { display: flex; align-items: center; gap: .5rem; padding: .2rem 0; font-size: .88rem; }
+.podium-rank { font-weight: 700; color: #999; width: 1.2rem; text-align: center; flex-shrink: 0; }
+.podium-rank.gold   { color: #f9a825; }
+.podium-rank.silver { color: #90a4ae; }
+.podium-rank.bronze { color: #a1887f; }
+.podium-score { margin-left: auto; color: #555; font-size: .82rem; font-variant-numeric: tabular-nums; }
+
+/* SEASON WINNER CARD (history page) */
+.winner-card { background: #1a1a2e; color: #fff; border-radius: 8px; padding: 1.5rem 2rem; display: flex; align-items: center; gap: 2rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+.winner-trophy { font-size: 3rem; line-height: 1; }
+.winner-info { flex: 1; }
+.winner-label { font-size: .8rem; color: #90caf9; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.winner-name { font-size: 2rem; font-weight: 800; margin: .2rem 0; }
+.winner-name a { color: #fff; }
+.winner-name a:hover { color: #90caf9; text-decoration: none; }
+.winner-score { font-size: 1rem; color: #aaa; }
+.winner-score strong { color: #fff; font-size: 1.3rem; }
+.podium-row { display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+.podium-card { background: #fff; border-radius: 6px; padding: .75rem 1.1rem; box-shadow: 0 1px 4px rgba(0,0,0,0.08); min-width: 160px; flex: 1; }
+.podium-card .place { font-size: .75rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #888; margin-bottom: .25rem; }
+.podium-card .name  { font-size: .95rem; font-weight: 700; color: #1a1a2e; }
+.podium-card .score { font-size: .85rem; color: #555; margin-top: .1rem; }
+.season-select-bar { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+.season-select-bar label { font-weight: 600; color: #555; font-size: .9rem; }
+.season-select-bar select { width: auto; }
+
+/* LOGIN */
+.login-wrap { max-width: 380px; margin: 5rem auto; padding: 0 1.5rem; }
+.login-wrap h1 { text-align: center; margin-bottom: 1.5rem; }
 
 /* PROVISIONAL (below min matches threshold) */
 .provisional-row td { color: #bbb; background: #f9f9f9; }

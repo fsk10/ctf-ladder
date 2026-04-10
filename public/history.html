@@ -6,44 +6,6 @@
   <title>Season History — CTF Ladder</title>
   <link rel="stylesheet" href="/css/style.css">
   <link rel="icon" href="/playunreal.webp" type="image/webp">
-  <style>
-    .winner-card {
-      background: #1a1a2e;
-      color: #fff;
-      border-radius: 8px;
-      padding: 1.5rem 2rem;
-      display: flex;
-      align-items: center;
-      gap: 2rem;
-      margin-bottom: 1.5rem;
-      flex-wrap: wrap;
-    }
-    .winner-trophy { font-size: 3rem; line-height: 1; }
-    .winner-info { flex: 1; }
-    .winner-label { font-size: .8rem; color: #90caf9; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
-    .winner-name { font-size: 2rem; font-weight: 800; margin: .2rem 0; }
-    .winner-name a { color: #fff; }
-    .winner-name a:hover { color: #90caf9; text-decoration: none; }
-    .winner-score { font-size: 1rem; color: #aaa; }
-    .winner-score strong { color: #fff; font-size: 1.3rem; }
-    .podium-row { display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
-    .podium-card {
-      background: #fff;
-      border-radius: 6px;
-      padding: .75rem 1.1rem;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-      min-width: 160px;
-      flex: 1;
-    }
-    .podium-card .place { font-size: .75rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #888; margin-bottom: .25rem; }
-    .podium-card .name  { font-size: .95rem; font-weight: 700; color: #1a1a2e; }
-    .podium-card .score { font-size: .85rem; color: #555; margin-top: .1rem; }
-    .season-select-bar { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
-    .season-select-bar label { font-weight: 600; color: #555; font-size: .9rem; }
-    .season-select-bar select { width: auto; }
-    thead th[onclick] { cursor: pointer; user-select: none; }
-    thead th[onclick]:hover { background: #2a2a4e; }
-  </style>
 </head>
 <body>
 <nav>
@@ -153,7 +115,8 @@ function tableHeaders() {
 
 function tableRow(p, rank, provisional = false) {
   const cls = provisional ? ' class="provisional-row"' : '';
-  const medal = !provisional && rank === 1 ? ' 🏆' : !provisional && rank === 2 ? ' 🥈' : !provisional && rank === 3 ? ' 🥉' : '';
+  const medalEmoji = !provisional && rank === 1 ? '🏆' : !provisional && rank === 2 ? '🥈' : !provisional && rank === 3 ? '🥉' : '';
+  const medal = medalEmoji ? ` <span class="trophy">${medalEmoji}</span>` : '';
   const rankCell = provisional ? '—' : rank;
   if (viewMode === 'points') {
     return `<tr${cls}>

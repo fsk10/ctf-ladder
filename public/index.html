@@ -6,53 +6,6 @@
   <title>CTF Ladder</title>
   <link rel="stylesheet" href="/css/style.css">
   <link rel="icon" href="/playunreal.webp" type="image/webp">
-  <style>
-    .tabs {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0;
-      border-bottom: 2px solid #1a1a2e;
-      margin-bottom: 1.25rem;
-    }
-    .tab {
-      padding: .55rem 1.1rem;
-      cursor: pointer;
-      font-size: .9rem;
-      font-weight: 600;
-      color: #555;
-      background: #fff;
-      border-radius: 4px 4px 0 0;
-      transition: color .15s, background .15s;
-      white-space: nowrap;
-    }
-    .tab:hover { color: #1a1a2e; background: #f0f2f5; }
-    .tab.active { color: #fff; background: #1a1a2e; border-color: #1a1a2e; }
-    .trophy { cursor: default; font-style: normal; }
-    .history-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 1rem;
-      margin-top: .75rem;
-    }
-    .history-card {
-      background: #fff;
-      border-radius: 6px;
-      padding: 1rem 1.25rem;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-    }
-    .history-card h4 { font-size: .95rem; color: #1a1a2e; margin-bottom: .6rem; }
-    .history-podium { list-style: none; padding: 0; margin: 0; }
-    .history-podium li { display: flex; align-items: center; gap: .5rem; padding: .2rem 0; font-size: .88rem; }
-    .podium-rank { font-weight: 700; color: #999; width: 1.2rem; text-align: center; flex-shrink: 0; }
-    .podium-rank.gold   { color: #f9a825; }
-    .podium-rank.silver { color: #90a4ae; }
-    .podium-rank.bronze { color: #a1887f; }
-    .podium-score { margin-left: auto; color: #555; font-size: .82rem; font-variant-numeric: tabular-nums; }
-    thead th { cursor: pointer; user-select: none; }
-    thead th:hover { background: #2a2a4e; }
-    thead th:first-child { cursor: default; }
-    thead th:first-child:hover { background: #1a1a2e; }
-  </style>
 </head>
 <body>
 <nav>
