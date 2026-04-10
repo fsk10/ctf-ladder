@@ -62,10 +62,10 @@
       ['Result',    'Win by \u22655 caps',            '+' + s.overall_winBy5],
       ['Result',    'Loss by \u22655 caps',           '' + s.overall_loseBy5],
       ['Attacking', 'Per cap',                        '\xd7' + s.attacking_cap],
-      ['Attacking', 'Per 3 covers (continuous)',      '\xd7' + s.attacking_cover],
+      ['Attacking', 'Per cover',                      '\xd7' + s.attacking_cover],
       ['Attacking', 'Per assist',                     '\xd7' + s.attacking_assist],
-      ['Defending', 'Per 5 returns (continuous)',     '\xd7' + s.defending_return],
-      ['Defending', 'Per 10 flag kills (continuous)', '\xd7' + s.defending_flagKill],
+      ['Defending', 'Per return',                     '\xd7' + s.defending_return],
+      ['Defending', 'Per flag kill',                  '\xd7' + s.defending_flagKill],
       ['Defending', 'Per seal',                       '\xd7' + s.defending_seal],
       ['Extra',     'Clean sheet (opponent = 0 caps)','+' + s.extra_cleanSheet],
     ];
