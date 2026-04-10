@@ -626,6 +626,37 @@ router.delete('/wipe', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// GET /api/admin/export-match-urls  — download all match API URLs as a text file
+router.get('/export-match-urls', requireAuth, (req, res) => {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT s.name AS season, m.api_url
+    FROM matches m
+    JOIN weeks w ON m.week_id = w.id
+    JOIN seasons s ON w.season_id = s.id
+    WHERE m.api_url NOT LIKE 'legacy://%'
+    ORDER BY s.id, w.week_number, m.id
+  `).all();
+
+  const grouped = {};
+  for (const row of rows) {
+    if (!grouped[row.season]) grouped[row.season] = [];
+    grouped[row.season].push(row.api_url);
+  }
+
+  const lines = [];
+  for (const [season, urls] of Object.entries(grouped)) {
+    lines.push(`# ${season}`);
+    lines.push(...urls);
+    lines.push('');
+  }
+
+  const ts = new Date().toISOString().slice(0, 10);
+  res.setHeader('Content-Type', 'text/plain');
+  res.setHeader('Content-Disposition', `attachment; filename="match-urls-${ts}.txt"`);
+  res.send(lines.join('\n'));
+});
+
 // GET /api/admin/backup  — download a consistent hot backup of the SQLite database
 router.get('/backup', requireAuth, (req, res) => {
   const db  = getDb();
