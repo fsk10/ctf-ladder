@@ -156,14 +156,22 @@ function tableHeaders(scoreLabel) {
   }
 }
 
+function rankArrow(p) {
+  const d = p.rank_change;
+  if (d > 0) return `<span class="rank-arrow rank-up" title="Up ${d} spot${d > 1 ? 's' : ''}">▲${d}</span>`;
+  if (d < 0) return `<span class="rank-arrow rank-down" title="Down ${Math.abs(d)} spot${Math.abs(d) > 1 ? 's' : ''}">▼${Math.abs(d)}</span>`;
+  return '<span class="rank-arrow"></span>';
+}
+
 function tableRow(p, rank, provisional = false) {
   const pugs = p.total_pugs ?? p.pugs_played;
   const cls = provisional ? ' class="provisional-row"' : '';
   const rankCell = provisional ? '—' : rank;
+  const arrow = rankArrow(p);
   if (viewMode === 'points') {
     return `<tr${cls}>
       <td class="rank">${rankCell}</td>
-      <td><a href="/player/${p.player_id}">${esc(p.display_name)}</a>${trophyHTML(p)}</td>
+      <td class="player-col">${arrow}<a href="/player/${p.player_id}">${esc(p.display_name)}</a>${trophyHTML(p)}</td>
       <td class="num">${pugs}</td>
       <td class="num">${fmt(p.total_points)}</td>
       <td class="num">${fmt(p.avg_points_per_pug)}</td>
@@ -173,7 +181,7 @@ function tableRow(p, rank, provisional = false) {
   } else {
     return `<tr${cls}>
       <td class="rank">${rankCell}</td>
-      <td><a href="/player/${p.player_id}">${esc(p.display_name)}</a>${trophyHTML(p)}</td>
+      <td class="player-col">${arrow}<a href="/player/${p.player_id}">${esc(p.display_name)}</a>${trophyHTML(p)}</td>
       <td class="num">${pugs}</td>
       <td class="num">${p.draws}</td>
       <td class="num">${p.wins}</td>

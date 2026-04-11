@@ -69,6 +69,40 @@ router.get('/standings', (req, res) => {
     return { ...r, ...s, season_wins: winners[r.player_id] || [] };
   }).sort((a, b) => b.score - a.score);
 
+  // Compute rank changes relative to standings before the latest week
+  const latestWeek = db.prepare(
+    'SELECT id FROM weeks WHERE season_id = ? ORDER BY week_number DESC LIMIT 1'
+  ).get(season.id);
+
+  if (latestWeek) {
+    const prevRows = db.prepare(`
+      SELECT p.id AS player_id,
+             COUNT(DISTINCT ms.match_id) AS total_pugs,
+             COALESCE(SUM(ms.total_points), 0) AS total_points
+      FROM players p
+      JOIN match_stats ms ON ms.player_id = p.id
+      JOIN matches m ON m.id = ms.match_id
+      JOIN weeks w ON w.id = m.week_id
+      WHERE w.season_id = ? AND w.id != ?
+      GROUP BY p.id
+    `).all(season.id, latestWeek.id);
+
+    if (prevRows.length > 0) {
+      const prevSorted = prevRows.map(r => {
+        const s = calculateScore(r.total_points, r.total_pugs, settings.participation_bonus_coefficient);
+        return { player_id: r.player_id, score: s.score };
+      }).sort((a, b) => b.score - a.score);
+
+      const prevRankMap = {};
+      prevSorted.forEach((p, i) => { prevRankMap[p.player_id] = i + 1; });
+
+      standings.forEach((p, i) => {
+        const prevRank = prevRankMap[p.player_id];
+        p.rank_change = prevRank != null ? prevRank - (i + 1) : null; // positive = moved up
+      });
+    }
+  }
+
   res.json({ season, standings, min_matches: minMatches });
 });
 
