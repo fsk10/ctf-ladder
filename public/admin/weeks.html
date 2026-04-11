@@ -111,7 +111,7 @@ async function loadList() {
   const rows = weeks.map(w => {
     const weekMatches = allMatches.filter(m => m.week_id === w.id);
     const matchRows = weekMatches.map(m => `
-      <tr id="match-row-${m.id}" style="background:#f7f8fb">
+      <tr id="match-row-${m.id}" data-week="${w.id}" style="display:none;background:#f7f8fb">
         <td style="padding-left:2rem" colspan="2">
           <label style="display:inline-flex;align-items:center;gap:.4rem;cursor:pointer">
             <input type="checkbox" class="match-chk" data-week="${w.id}" value="${m.id}" onchange="updateDeleteSelected(${w.id})">
@@ -127,7 +127,7 @@ async function loadList() {
           <button class="btn btn-danger btn-sm" onclick="deleteMatch(${m.id})">Delete</button>
         </td>
       </tr>
-      <tr id="match-edit-${m.id}" style="display:none;background:#edf3ff">
+      <tr id="match-edit-${m.id}" data-week="${w.id}" style="display:none;background:#edf3ff">
         <td colspan="7" style="padding:.75rem 1rem">
           <div class="form-row">
             <div class="form-group"><label>Map</label><input type="text" id="em-map-${m.id}" value="${esc(m.map||'')}"></div>
@@ -144,7 +144,10 @@ async function loadList() {
     const hasSummary = !!w.ai_summary;
     return `
     <tr id="week-row-${w.id}" style="background:#e9eaf1">
-      <td>${w.season_name}</td>
+      <td>
+        ${w.match_count > 0 ? `<span id="toggle-${w.id}" onclick="toggleWeekMatches(${w.id})" title="Expand" style="cursor:pointer;display:inline-block;width:1.1rem;font-size:.72rem;color:#888;user-select:none;vertical-align:middle">▶</span>` : `<span style="display:inline-block;width:1.1rem"></span>`}
+        ${w.season_name}
+      </td>
       <td>
         ${w.match_count > 0 ? `<input type="checkbox" id="sel-all-${w.id}" onchange="toggleSelectAll(${w.id}, this.checked)" style="margin-right:.5rem;cursor:pointer">` : ''}Week ${w.week_number}
         ${hasSummary ? `<span class="badge badge-green" style="margin-left:.4rem;font-size:.7rem">AI</span>` : ''}
@@ -327,6 +330,16 @@ async function deleteWeek(id) {
   if (!confirm('Delete this week?')) return;
   const res = await fetch(`/api/admin/weeks/${id}`, { method: 'DELETE' });
   if (res.ok) loadList();
+}
+
+function toggleWeekMatches(weekId) {
+  const icon = document.getElementById(`toggle-${weekId}`);
+  const expanding = icon.textContent.trim() === '▶';
+  document.querySelectorAll(`tr[data-week="${weekId}"][id^="match-row-"]`).forEach(row => {
+    row.style.display = expanding ? '' : 'none';
+  });
+  icon.textContent = expanding ? '▼' : '▶';
+  icon.title = expanding ? 'Collapse' : 'Expand';
 }
 
 checkAuth().then(loadSeasons).then(loadList);
