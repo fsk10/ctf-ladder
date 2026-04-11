@@ -1,3 +1,12 @@
+// Load .env for local development (ignored if file doesn't exist)
+const fs = require('fs');
+try {
+  fs.readFileSync('.env', 'utf8').split('\n').forEach(line => {
+    const m = line.match(/^\s*([^#\s][^=]*?)\s*=\s*(.*)\s*$/);
+    if (m) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+  });
+} catch (_) {}
+
 const express = require('express');
 const session = require('express-session');
 const SqliteStore = require('better-sqlite3-session-store')(session);

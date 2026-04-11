@@ -55,6 +55,21 @@ function sortBy(col) {
   refreshContent();
 }
 
+function weekSummaryHTML(weekData) {
+  const s = weekData.week && weekData.week.ai_summary;
+  if (!s) return '';
+  const paras = s.split(/\n\n+/).map(p => {
+    // Escape HTML, then convert **name** → <strong>name</strong>
+    const escaped = esc(p).replace(/\n/g, '<br>');
+    const bolded  = escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    return `<p>${bolded}</p>`;
+  }).join('');
+  return `<div class="week-summary-card">
+    <div class="week-summary-title">Week ${esc(String(weekData.week.week_number))} Recap</div>
+    <div class="week-summary-body">${paras}</div>
+  </div>`;
+}
+
 function refreshContent() {
   const content = document.getElementById('tabContent');
   if (!content) return;
@@ -64,7 +79,12 @@ function refreshContent() {
   const sorted = sortedData(filtered);
   const scoreLabel = activeTab === 'standings' ? 'Final Score' : 'Weekly Score';
   const minMatches = activeTab === 'standings' ? currentMinMatches : 0;
-  let html = searchBarHTML() + viewToggleHTML(minMatches) + tableBodyHTML(sorted, scoreLabel, minMatches);
+  let html = '';
+  if (activeTab !== 'standings') {
+    const weekId = activeTab.replace('week-', '');
+    if (cachedWeekData[weekId]) html += weekSummaryHTML(cachedWeekData[weekId]);
+  }
+  html += searchBarHTML() + viewToggleHTML(minMatches) + tableBodyHTML(sorted, scoreLabel, minMatches);
   if (activeTab !== 'standings') {
     const weekId = activeTab.replace('week-', '');
     if (cachedWeekData[weekId]) html += matchesHTML(cachedWeekData[weekId].matches);
@@ -91,11 +111,11 @@ async function load() {
 
 function renderTabs() {
   const tabs = [
-    { id: 'standings', label: 'Standings' },
-    ...currentWeeks.map(w => ({ id: 'week-' + w.id, label: 'Week ' + w.week_number }))
+    { id: 'standings', label: 'Standings', dot: false },
+    ...[...currentWeeks].reverse().map(w => ({ id: 'week-' + w.id, label: 'Week ' + w.week_number, dot: !!w.has_summary }))
   ];
   return `<div class="tabs">
-    ${tabs.map(t => `<div class="tab${activeTab === t.id ? ' active' : ''}" onclick="switchTab('${t.id}')">${t.label}</div>`).join('')}
+    ${tabs.map(t => `<div class="tab${activeTab === t.id ? ' active' : ''}" onclick="switchTab('${t.id}')">${t.label}${t.dot ? '<span class="tab-summary-dot"></span>' : ''}</div>`).join('')}
   </div>`;
 }
 
@@ -289,10 +309,10 @@ async function switchTab(tabId) {
   } else {
     const weekId = tabId.replace('week-', '');
     document.getElementById('tabContent').innerHTML = '<p class="loading">Loading…</p>';
-    const { standings, matches } = await (await fetch(`/api/week/${weekId}`)).json();
+    const { standings, matches, week } = await (await fetch(`/api/week/${weekId}`)).json();
     // normalize pugs_played → total_pugs for consistent sort key
     const normalized = standings.map(p => ({ ...p, total_pugs: p.pugs_played ?? p.total_pugs }));
-    cachedWeekData[weekId] = { standings: normalized, matches };
+    cachedWeekData[weekId] = { standings: normalized, matches, week };
     currentStandings = normalized;
     refreshContent();
   }

@@ -141,11 +141,13 @@ async function loadList() {
         </td>
       </tr>`).join('');
 
+    const hasSummary = !!w.ai_summary;
     return `
     <tr id="week-row-${w.id}" style="background:#e9eaf1">
       <td>${w.season_name}</td>
       <td>
         ${w.match_count > 0 ? `<input type="checkbox" id="sel-all-${w.id}" onchange="toggleSelectAll(${w.id}, this.checked)" style="margin-right:.5rem;cursor:pointer">` : ''}Week ${w.week_number}
+        ${hasSummary ? `<span class="badge badge-green" style="margin-left:.4rem;font-size:.7rem">AI</span>` : ''}
       </td>
       <td>${w.week_date || '—'}</td>
       <td></td>
@@ -154,9 +156,26 @@ async function loadList() {
       <td style="white-space:nowrap">
         <a href="/admin/import?week_id=${w.id}" class="btn btn-primary btn-sm">Import</a>
         <button class="btn btn-outline btn-sm" onclick="editWeek(${w.id}, ${w.week_number}, '${w.week_date||''}')">Edit</button>
+        <button class="btn btn-outline btn-sm" onclick="toggleAiRow(${w.id})">AI</button>
         ${w.match_count === 0
           ? `<button class="btn btn-danger btn-sm" onclick="deleteWeek(${w.id})">Delete</button>`
           : `<button id="del-sel-${w.id}" class="btn btn-danger btn-sm" disabled onclick="deleteSelectedMatches(${w.id})">Delete</button>`}
+      </td>
+    </tr>
+    <tr id="week-ai-${w.id}" style="display:none;background:#f0f4f0">
+      <td colspan="7" style="padding:.75rem 1rem">
+        <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+          <label style="font-weight:600;font-size:.88rem">Style:</label>
+          <select id="summary-style-${w.id}" style="padding:.38rem .6rem;font-size:.88rem;border:1px solid #ccc;border-radius:4px;background:#fff">
+            <option value="serious">Serious</option>
+            <option value="hype">Hype</option>
+            <option value="funny">Funny</option>
+            <option value="epic">Epic</option>
+          </select>
+          <button id="gen-btn-${w.id}" class="btn btn-success btn-sm" onclick="generateSummary(${w.id})">${hasSummary ? 'Regenerate' : 'Generate'}</button>
+          ${hasSummary ? `<button class="btn btn-danger btn-sm" onclick="deleteSummary(${w.id})">Delete summary</button>` : ''}
+          <button class="btn btn-secondary btn-sm" onclick="toggleAiRow(${w.id})">Cancel</button>
+        </div>
       </td>
     </tr>
     <tr id="week-edit-${w.id}" style="display:none;background:#edf3ff">
@@ -252,6 +271,36 @@ async function deleteSelectedMatches(weekId) {
     await fetch(`/api/admin/matches/${chk.value}`, { method: 'DELETE' });
   }
   loadList();
+}
+
+function toggleAiRow(weekId) {
+  const row = document.getElementById(`week-ai-${weekId}`);
+  row.style.display = row.style.display === 'none' ? '' : 'none';
+}
+
+async function generateSummary(weekId) {
+  const btn   = document.getElementById(`gen-btn-${weekId}`);
+  const style = document.getElementById(`summary-style-${weekId}`)?.value || 'serious';
+  btn.disabled = true;
+  btn.textContent = 'Generating…';
+  const res = await fetch(`/api/admin/weeks/${weekId}/summary`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ style })
+  });
+  if (res.ok) { loadList(); }
+  else {
+    const d = await res.json();
+    alert('Error: ' + d.error);
+    btn.disabled = false;
+    btn.textContent = 'AI Summary';
+  }
+}
+
+async function deleteSummary(weekId) {
+  if (!confirm('Delete AI summary for this week?')) return;
+  const res = await fetch(`/api/admin/weeks/${weekId}/summary`, { method: 'DELETE' });
+  if (res.ok) loadList();
 }
 
 async function createWeek() {

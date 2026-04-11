@@ -176,7 +176,7 @@ router.get('/season/:id/weeks', (req, res) => {
   if (!season) return res.status(404).json({ error: 'Season not found' });
 
   const weeks = db.prepare(`
-    SELECT w.*, COUNT(m.id) AS match_count
+    SELECT w.id, w.week_number, w.week_date, w.ai_summary IS NOT NULL AS has_summary, COUNT(m.id) AS match_count
     FROM weeks w LEFT JOIN matches m ON m.week_id = w.id
     WHERE w.season_id = ?
     GROUP BY w.id ORDER BY w.week_number

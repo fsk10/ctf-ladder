@@ -196,6 +196,143 @@ router.delete('/weeks/:id', requireAuth, (req, res) => {
   res.json({ success: true });
 });
 
+// ===== WEEK AI SUMMARY =====
+
+router.post('/weeks/:id/summary', requireAuth, async (req, res) => {
+  const db = getDb();
+  const { getSeasonSettings, calculateScore } = require('../lib/scoring');
+  const week = db.prepare(`
+    SELECT w.*, s.name AS season_name
+    FROM weeks w JOIN seasons s ON s.id = w.season_id WHERE w.id = ?
+  `).get(req.params.id);
+  if (!week) return res.status(404).json({ error: 'Week not found' });
+
+  if (!process.env.ANTHROPIC_API_KEY)
+    return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
+
+  const matches = db.prepare('SELECT * FROM matches WHERE week_id = ? ORDER BY match_date').all(week.id);
+
+  // Overall player stats for the week
+  const playerRows = db.prepare(`
+    SELECT p.display_name,
+           COUNT(DISTINCT ms.match_id) AS pugs,
+           COALESCE(SUM(ms.flag_capture), 0) AS caps,
+           COALESCE(SUM(ms.flag_assist), 0)  AS assists,
+           COALESCE(SUM(ms.flag_return), 0)  AS returns,
+           COALESCE(SUM(ms.flag_seal), 0)    AS seals,
+           COALESCE(SUM(ms.total_points), 0) AS pts,
+           SUM(CASE WHEN (ms.team='Red' AND m.red_score > m.blue_score) OR (ms.team='Blue' AND m.blue_score > m.red_score) THEN 1 ELSE 0 END) AS wins,
+           SUM(CASE WHEN m.red_score = m.blue_score THEN 1 ELSE 0 END) AS draws
+    FROM players p
+    JOIN match_stats ms ON ms.player_id = p.id
+    JOIN matches m ON m.id = ms.match_id
+    WHERE m.week_id = ?
+    GROUP BY p.id ORDER BY pts DESC
+  `).all(week.id);
+
+  // Per-player per-map breakdown
+  const mapRows = db.prepare(`
+    SELECT p.display_name, COALESCE(m.map, 'Unknown map') AS map,
+           COALESCE(SUM(ms.flag_capture), 0) AS caps,
+           COALESCE(SUM(ms.flag_assist), 0)  AS assists,
+           COALESCE(SUM(ms.flag_seal), 0)    AS seals,
+           COALESCE(SUM(ms.flag_return), 0)  AS returns,
+           COALESCE(SUM(ms.total_points), 0) AS pts
+    FROM players p
+    JOIN match_stats ms ON ms.player_id = p.id
+    JOIN matches m ON m.id = ms.match_id
+    WHERE m.week_id = ?
+    GROUP BY p.id, m.id ORDER BY p.display_name, pts DESC
+  `).all(week.id);
+
+  // Group map rows by player
+  const mapsByPlayer = {};
+  for (const r of mapRows) {
+    if (!mapsByPlayer[r.display_name]) mapsByPlayer[r.display_name] = [];
+    mapsByPlayer[r.display_name].push(r);
+  }
+
+  const settings  = getSeasonSettings(db, week.season_id);
+  const allWeeks  = db.prepare('SELECT id, week_number FROM weeks WHERE season_id = ? ORDER BY week_number').all(week.season_id);
+  const thisIdx   = allWeeks.findIndex(w => w.id === week.id);
+
+  function getStandings(weekIds) {
+    if (!weekIds.length) return {};
+    const ph   = weekIds.map(() => '?').join(',');
+    const rows = db.prepare(`
+      SELECT p.display_name, COUNT(DISTINCT ms.match_id) AS pugs, COALESCE(SUM(ms.total_points), 0) AS pts
+      FROM players p JOIN match_stats ms ON ms.player_id = p.id JOIN matches m ON m.id = ms.match_id
+      WHERE m.week_id IN (${ph}) GROUP BY p.id
+    `).all(...weekIds);
+    const sorted = rows.map(r => ({ name: r.display_name, score: calculateScore(r.pts, r.pugs, settings.participation_bonus_coefficient).score }))
+                       .sort((a, b) => b.score - a.score);
+    const rankMap = {};
+    sorted.forEach((p, i) => { rankMap[p.name] = i + 1; });
+    return rankMap;
+  }
+
+  const rankBefore = thisIdx > 0 ? getStandings(allWeeks.slice(0, thisIdx).map(w => w.id)) : {};
+  const rankAfter  = getStandings(allWeeks.slice(0, thisIdx + 1).map(w => w.id));
+
+  const matchLines = matches.map(m => `- ${m.map || 'Unknown map'} (${Math.max(m.red_score, m.blue_score)}–${Math.min(m.red_score, m.blue_score)})`).join('\n');
+
+  const statsLines = playerRows.map(p => {
+    const before = rankBefore[p.display_name], after = rankAfter[p.display_name];
+    const rankStr = after ? `#${after}${before && before !== after ? ` (was #${before})` : before === after ? ' (unchanged)' : ' (new)'}` : '';
+    const maps = mapsByPlayer[p.display_name] || [];
+    const mapDetail = maps.length > 1
+      ? '  Maps: ' + maps.map(r => `${r.map}: ${r.caps}c/${r.assists}a/${r.seals}s`).join(', ')
+      : '';
+    return `- ${p.display_name}: ${p.pugs} pugs, ${p.caps} caps, ${p.assists} ast, ${p.seals} seals, ${p.returns} ret, ${p.wins}W/${p.draws}D, ${p.pts.toFixed(1)} pts | Standing: ${rankStr}${mapDetail ? '\n' + mapDetail : ''}`;
+  }).join('\n');
+
+  const style = req.body.style || 'serious';
+  const styleInstructions = {
+    serious: 'Write in a professional, factual sports journalism style. Focus on individual performances, key stats, and ranking changes. Tone: neutral and informative.',
+    hype:    'Write in an energetic, hype-man style as if you are a live esports commentator. Use exclamation points, highlight big moments, and amp up the players. High energy throughout.',
+    funny:   'Write in a humorous, lighthearted style with jokes, wordplay, and playful commentary. Poke fun at bad scores and celebrate the absurd. Don\'t take it too seriously.',
+    epic:    'Write in an epic, over-the-top dramatic style as if narrating an ancient battle or legendary sporting event. Use grandiose language, metaphors, and hyperbole. Every cap is a heroic feat.',
+  };
+  const toneInstruction = styleInstructions[style] || styleInstructions.serious;
+
+  const system = `You are writing weekly recaps for a CTF (Capture the Flag) ladder based on Unreal Tournament pick-up games (PUGs). Players join a pool and are split into two random teams each match — so team affiliation is meaningless and changes every game. Never mention team colors (Red/Blue), never use the word "faction", and never frame results around teams. Focus entirely on individual players: their stats, ranking movement, and any map-specific patterns. Refer to matches simply as "games" or "matches". Mention a good spread of players by name — not just the top performers, but also mid-table players and those who struggled. Readers love seeing their own name. Aim for roughly half the player pool, spread naturally across the paragraphs. Write in flowing prose, 2–3 paragraphs. No bullet points, no headers. Wrap every player name in **double asterisks** — e.g. **PlayerName** — every time it appears.`;
+
+  const userPrompt = `Write a weekly recap for the data below. ${toneInstruction}
+
+Season: ${week.season_name} — Week ${week.week_number}${week.week_date ? ` (${week.week_date})` : ''}
+
+MAPS PLAYED:
+${matchLines || '(none)'}
+
+PLAYER PERFORMANCES (sorted by points, best first):
+${statsLines || '(none)'}`;
+
+  try {
+    const Anthropic = require('@anthropic-ai/sdk');
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const msg = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 700,
+      system,
+      messages: [{ role: 'user', content: userPrompt }]
+    });
+    const summary = msg.content[0].text.trim();
+    db.prepare('UPDATE weeks SET ai_summary = ? WHERE id = ?').run(summary, week.id);
+    res.json({ summary });
+  } catch (err) {
+    console.error('AI summary error:', err.message);
+    res.status(500).json({ error: 'Failed to generate summary: ' + err.message });
+  }
+});
+
+router.delete('/weeks/:id/summary', requireAuth, (req, res) => {
+  const db = getDb();
+  if (!db.prepare('SELECT id FROM weeks WHERE id = ?').get(req.params.id))
+    return res.status(404).json({ error: 'Week not found' });
+  db.prepare('UPDATE weeks SET ai_summary = NULL WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
+});
+
 // ===== MATCHES =====
 
 router.get('/matches', requireAuth, (req, res) => {
