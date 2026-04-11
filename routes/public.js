@@ -69,10 +69,42 @@ router.get('/standings', (req, res) => {
     return { ...r, ...s, season_wins: winners[r.player_id] || [] };
   }).sort((a, b) => b.score - a.score);
 
+  // Compute rank history — cumulative rank after each week
+  const allSeasonWeeks = db.prepare(
+    'SELECT id, week_number FROM weeks WHERE season_id = ? ORDER BY week_number'
+  ).all(season.id);
+
+  if (allSeasonWeeks.length > 1) {
+    const rankHistoryMap = {};
+    for (let i = 0; i < allSeasonWeeks.length; i++) {
+      const weekIds = allSeasonWeeks.slice(0, i + 1).map(w => w.id);
+      const placeholders = weekIds.map(() => '?').join(',');
+      const weekRows = db.prepare(`
+        SELECT p.id AS player_id,
+               COUNT(DISTINCT ms.match_id) AS total_pugs,
+               COALESCE(SUM(ms.total_points), 0) AS total_points
+        FROM players p
+        JOIN match_stats ms ON ms.player_id = p.id
+        JOIN matches m ON m.id = ms.match_id
+        WHERE m.week_id IN (${placeholders})
+        GROUP BY p.id
+      `).all(...weekIds);
+      const weekSorted = weekRows.map(r => {
+        const s = calculateScore(r.total_points, r.total_pugs, settings.participation_bonus_coefficient);
+        return { player_id: r.player_id, score: s.score };
+      }).sort((a, b) => b.score - a.score);
+      weekSorted.forEach((p, idx) => {
+        if (!rankHistoryMap[p.player_id]) rankHistoryMap[p.player_id] = [];
+        rankHistoryMap[p.player_id].push({ week: allSeasonWeeks[i].week_number, rank: idx + 1 });
+      });
+    }
+    standings.forEach(p => { p.rank_history = rankHistoryMap[p.player_id] || []; });
+  }
+
   // Compute rank changes relative to standings before the latest week
-  const latestWeek = db.prepare(
-    'SELECT id FROM weeks WHERE season_id = ? ORDER BY week_number DESC LIMIT 1'
-  ).get(season.id);
+  const latestWeek = allSeasonWeeks.length
+    ? allSeasonWeeks[allSeasonWeeks.length - 1]
+    : null;
 
   if (latestWeek) {
     const prevRows = db.prepare(`

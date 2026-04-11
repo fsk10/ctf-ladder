@@ -158,9 +158,10 @@ function tableHeaders(scoreLabel) {
 
 function rankArrow(p) {
   const d = p.rank_change;
-  if (d > 0) return `<span class="rank-arrow rank-up" title="Up ${d} spot${d > 1 ? 's' : ''}">▲${d}</span>`;
-  if (d < 0) return `<span class="rank-arrow rank-down" title="Down ${Math.abs(d)} spot${Math.abs(d) > 1 ? 's' : ''}">▼${Math.abs(d)}</span>`;
-  return '<span class="rank-arrow"></span>';
+  const pid = ` data-pid="${p.player_id}"`;
+  if (d > 0) return `<span class="rank-arrow rank-up"${pid}>▲${d}</span>`;
+  if (d < 0) return `<span class="rank-arrow rank-down"${pid}>▼${Math.abs(d)}</span>`;
+  return `<span class="rank-arrow"${pid}></span>`;
 }
 
 function tableRow(p, rank, provisional = false) {
@@ -168,9 +169,10 @@ function tableRow(p, rank, provisional = false) {
   const cls = provisional ? ' class="provisional-row"' : '';
   const rankCell = provisional ? '—' : rank;
   const arrow = rankArrow(p);
+  const rankTd = `<td class="rank">${rankCell}</td>`;
   if (viewMode === 'points') {
     return `<tr${cls}>
-      <td class="rank">${rankCell}</td>
+      ${rankTd}
       <td class="player-col">${arrow}<a href="/player/${p.player_id}">${esc(p.display_name)}</a>${trophyHTML(p)}</td>
       <td class="num">${pugs}</td>
       <td class="num">${fmt(p.total_points)}</td>
@@ -180,7 +182,7 @@ function tableRow(p, rank, provisional = false) {
     </tr>`;
   } else {
     return `<tr${cls}>
-      <td class="rank">${rankCell}</td>
+      ${rankTd}
       <td class="player-col">${arrow}<a href="/player/${p.player_id}">${esc(p.display_name)}</a>${trophyHTML(p)}</td>
       <td class="num">${pugs}</td>
       <td class="num">${p.draws}</td>
@@ -302,9 +304,56 @@ function tabLabel(tabId) {
   return week ? 'Week ' + week.week_number : '';
 }
 
+function showRankTooltip(arrow, history) {
+  const tip = document.getElementById('rank-tooltip');
+  // newest week first
+  const reversed = [...history].reverse();
+  let rows = '';
+  for (let i = 0; i < reversed.length; i++) {
+    const h = reversed[i];
+    // change compared to previous week (next in reversed array = one week earlier)
+    let change = '';
+    if (i < reversed.length - 1) {
+      const diff = reversed[i + 1].rank - h.rank;
+      if (diff > 0)      change = `<span class="rank-up">▲${diff}</span>`;
+      else if (diff < 0) change = `<span class="rank-down">▼${Math.abs(diff)}</span>`;
+      else               change = `<span class="rank-same">—</span>`;
+    }
+    rows += `<tr><td>Week ${h.week}</td><td>#${h.rank}</td><td>${change}</td></tr>`;
+  }
+  tip.innerHTML = `<table>${rows}</table>`;
+  const rect = arrow.getBoundingClientRect();
+  const tipW = 110;
+  const left = (rect.right + window.scrollX + 8) + tipW > window.innerWidth
+    ? rect.left + window.scrollX - tipW - 8
+    : rect.right + window.scrollX + 8;
+  tip.style.left = left + 'px';
+  tip.style.top  = (rect.top + window.scrollY - 4) + 'px';
+  tip.classList.add('visible');
+}
+
+function hideRankTooltip() {
+  document.getElementById('rank-tooltip').classList.remove('visible');
+}
+
+document.addEventListener('mouseover', e => {
+  const arrow = e.target.closest('.rank-arrow[data-pid]');
+  if (!arrow) { hideRankTooltip(); return; }
+  const pid = +arrow.dataset.pid;
+  const player = currentStandings.find(p => p.player_id === pid);
+  if (!player || !player.rank_history || player.rank_history.length < 2) return;
+  showRankTooltip(arrow, player.rank_history);
+});
+
+document.addEventListener('mouseout', e => {
+  const arrow = e.target.closest('.rank-arrow[data-pid]');
+  if (arrow && !arrow.contains(e.relatedTarget)) hideRankTooltip();
+});
+
 load();
 
 </script>
+<div id="rank-tooltip" class="rank-tooltip"></div>
 <script src="/js/about.js"></script>
 </body>
 </html>

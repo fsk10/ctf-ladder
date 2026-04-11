@@ -338,10 +338,35 @@ thead th[onclick]:hover { background: #2a2a4e; }
 /* TROPHY */
 .trophy { cursor: default; font-style: normal; font-size: 1.2em; }
 
+/* RANK HISTORY TOOLTIP */
+.rank-tooltip {
+  display: none;
+  position: absolute;
+  background: #1a1a2e;
+  color: #fff;
+  border: 1px solid #3a3a5e;
+  border-radius: 5px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.78rem;
+  z-index: 200;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.rank-tooltip.visible { display: block; }
+.rank-tooltip table { border-collapse: collapse; background: transparent; }
+.rank-tooltip tbody tr,
+.rank-tooltip tbody tr:nth-child(even),
+.rank-tooltip tbody tr:hover { background: transparent; }
+.rank-tooltip td { padding: 0.15rem 0.35rem; color: #fff; border-bottom: none; font-size: 0.78rem; }
+.rank-tooltip td:first-child { color: #888; }
+.rank-tooltip td:nth-child(2) { font-weight: 700; text-align: right; }
+.rank-tooltip td:nth-child(3) { text-align: right; min-width: 1.8rem; }
+.rank-tooltip .rank-same { color: #555; }
+
 /* RANK MOVEMENT ARROWS */
 .rank-arrow            { display: inline-block; min-width: 1.8rem; text-align: left; font-size: 0.82rem; font-weight: 700; cursor: default; margin: 0 0.55rem; }
-.rank-arrow.rank-up    { color: #6b9f6e; }
-.rank-arrow.rank-down  { color: #cf6b6b; }
+.rank-up   { color: #6b9f6e; }
+.rank-down { color: #cf6b6b; }
 td.rank                { padding-right: 0; }
 td.player-col          { padding-left: 0; }
 
