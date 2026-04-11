@@ -109,10 +109,22 @@ async function load() {
   renderPage();
 }
 
+function summaryDotWeekId() {
+  const fiveDaysMs = 5 * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  // Find the most recently generated summary that is within 5 days
+  const recent = currentWeeks
+    .filter(w => w.ai_summary_generated_at)
+    .filter(w => (now - new Date(w.ai_summary_generated_at + 'Z').getTime()) < fiveDaysMs)
+    .sort((a, b) => new Date(b.ai_summary_generated_at) - new Date(a.ai_summary_generated_at));
+  return recent.length ? recent[0].id : null;
+}
+
 function renderTabs() {
+  const dotWeekId = summaryDotWeekId();
   const tabs = [
     { id: 'standings', label: 'Standings', dot: false },
-    ...[...currentWeeks].reverse().map(w => ({ id: 'week-' + w.id, label: 'Week ' + w.week_number, dot: !!w.has_summary }))
+    ...[...currentWeeks].reverse().map(w => ({ id: 'week-' + w.id, label: 'Week ' + w.week_number, dot: w.id === dotWeekId }))
   ];
   return `<div class="tabs">
     ${tabs.map(t => `<div class="tab${activeTab === t.id ? ' active' : ''}" onclick="switchTab('${t.id}')">${t.label}${t.dot ? '<span class="tab-summary-dot"></span>' : ''}</div>`).join('')}

@@ -317,7 +317,7 @@ ${statsLines || '(none)'}`;
       messages: [{ role: 'user', content: userPrompt }]
     });
     const summary = msg.content[0].text.trim();
-    db.prepare('UPDATE weeks SET ai_summary = ? WHERE id = ?').run(summary, week.id);
+    db.prepare('UPDATE weeks SET ai_summary = ?, ai_summary_generated_at = datetime(\'now\') WHERE id = ?').run(summary, week.id);
     res.json({ summary });
   } catch (err) {
     console.error('AI summary error:', err.message);
@@ -329,7 +329,7 @@ router.delete('/weeks/:id/summary', requireAuth, (req, res) => {
   const db = getDb();
   if (!db.prepare('SELECT id FROM weeks WHERE id = ?').get(req.params.id))
     return res.status(404).json({ error: 'Week not found' });
-  db.prepare('UPDATE weeks SET ai_summary = NULL WHERE id = ?').run(req.params.id);
+  db.prepare('UPDATE weeks SET ai_summary = NULL, ai_summary_generated_at = NULL WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
 });
 

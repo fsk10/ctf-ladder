@@ -101,7 +101,8 @@ function initDatabase() {
   if (!cols.includes('ended_at'))   db.exec("ALTER TABLE seasons ADD COLUMN ended_at TEXT");
 
   const weekCols = db.prepare("PRAGMA table_info(weeks)").all().map(c => c.name);
-  if (!weekCols.includes('ai_summary')) db.exec("ALTER TABLE weeks ADD COLUMN ai_summary TEXT");
+  if (!weekCols.includes('ai_summary'))              db.exec("ALTER TABLE weeks ADD COLUMN ai_summary TEXT");
+  if (!weekCols.includes('ai_summary_generated_at')) db.exec("ALTER TABLE weeks ADD COLUMN ai_summary_generated_at TEXT");
 
   const insert = db.prepare('INSERT OR IGNORE INTO scoring_settings (key, value) VALUES (?, ?)');
   const seed = db.transaction(() => {
