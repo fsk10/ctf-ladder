@@ -55,18 +55,43 @@ function sortBy(col) {
   refreshContent();
 }
 
-function weekSummaryHTML(weekData) {
-  const s = weekData.week && weekData.week.ai_summary;
-  if (!s) return '';
-  const paras = s.split(/\n\n+/).map(p => {
-    // Escape HTML, then convert **name** → <strong>name</strong>
+function seasonSummaryHTML(season) {
+  if (!season || !season.ai_summary) return '';
+  const paras = season.ai_summary.split(/\n\n+/).map(p => {
     const escaped = esc(p).replace(/\n/g, '<br>');
     const bolded  = escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     return `<p>${bolded}</p>`;
   }).join('');
-  return `<div class="week-summary-card">
-    <div class="week-summary-title">Week ${esc(String(weekData.week.week_number))} Recap</div>
-    <div class="week-summary-body">${paras}</div>
+  return `<div style="margin-bottom:1rem">
+    <div onclick="toggleRecap('season-recap')" style="display:inline-flex;align-items:center;gap:.45rem;cursor:pointer;user-select:none;font-size:.88rem;font-weight:600;color:#b07d2a">
+      <span id="season-recap-icon">▼</span> Season Recap
+    </div>
+    <div id="season-recap">
+      <div class="week-summary-card season-summary-card" style="margin-top:.6rem">
+        <div class="week-summary-body">${paras}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function weekSummaryHTML(weekData) {
+  const s = weekData.week && weekData.week.ai_summary;
+  if (!s) return '';
+  const paras = s.split(/\n\n+/).map(p => {
+    const escaped = esc(p).replace(/\n/g, '<br>');
+    const bolded  = escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    return `<p>${bolded}</p>`;
+  }).join('');
+  const id = `week-recap-${weekData.week.id}`;
+  return `<div style="margin-bottom:1rem">
+    <div onclick="toggleRecap('${id}')" style="display:inline-flex;align-items:center;gap:.45rem;cursor:pointer;user-select:none;font-size:.88rem;font-weight:600;color:#0069c0">
+      <span id="${id}-icon">▼</span> Week ${esc(String(weekData.week.week_number))} Recap
+    </div>
+    <div id="${id}">
+      <div class="week-summary-card" style="margin-top:.6rem">
+        <div class="week-summary-body">${paras}</div>
+      </div>
+    </div>
   </div>`;
 }
 
@@ -299,8 +324,14 @@ function matchesHTML(matches) {
 }
 
 function renderPage() {
+  const isFinished = currentSeason.status === 'finished';
+  const badge = isFinished
+    ? '<span class="badge badge-gray">Season Over</span>'
+    : '<span class="badge badge-green">Active</span>';
+  const recap = isFinished ? seasonSummaryHTML(currentSeason) : '';
   document.getElementById('app').innerHTML = `
-    <h1>${esc(currentSeason.name)} <span class="badge badge-green">Active</span></h1>
+    <h1>${esc(currentSeason.name)} ${badge}</h1>
+    ${recap}
     <div id="tabs">${renderTabs()}</div>
     <div id="tabContent">${searchBarHTML() + viewToggleHTML(currentMinMatches) + tableBodyHTML(sortedData(currentStandings), 'Final Score', currentMinMatches)}</div>`;
 }
@@ -334,6 +365,14 @@ function tabLabel(tabId) {
   if (tabId === 'standings') return 'Standings';
   const week = currentWeeks.find(w => w.id == tabId.replace('week-', ''));
   return week ? 'Week ' + week.week_number : '';
+}
+
+function toggleRecap(id) {
+  const body = document.getElementById(id);
+  const icon = document.getElementById(id + '-icon');
+  const expanded = body.style.display !== 'none';
+  body.style.display = expanded ? 'none' : '';
+  icon.textContent   = expanded ? '▶' : '▼';
 }
 
 function showRankTooltip(arrow, history) {

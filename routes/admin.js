@@ -105,14 +105,17 @@ router.put('/seasons/:id', requireAuth, (req, res) => {
   const db = getDb();
   const season = db.prepare('SELECT * FROM seasons WHERE id = ?').get(req.params.id);
   if (!season) return res.status(404).json({ error: 'Season not found' });
-  const { status, name } = req.body;
+  const { status, name, archived } = req.body;
   if (status) {
     if (status === 'active') {
       db.prepare("UPDATE seasons SET status = 'finished', ended_at = datetime('now') WHERE status = 'active' AND id != ?").run(season.id);
-      db.prepare("UPDATE seasons SET status = 'active', ended_at = NULL WHERE id = ?").run(season.id);
+      db.prepare("UPDATE seasons SET status = 'active', ended_at = NULL, archived = 0 WHERE id = ?").run(season.id);
     } else if (status === 'finished') {
       db.prepare("UPDATE seasons SET status = 'finished', ended_at = datetime('now') WHERE id = ?").run(season.id);
     }
+  }
+  if (typeof archived !== 'undefined') {
+    db.prepare('UPDATE seasons SET archived = ? WHERE id = ?').run(archived ? 1 : 0, season.id);
   }
   if (name?.trim()) db.prepare('UPDATE seasons SET name = ? WHERE id = ?').run(name.trim(), season.id);
   res.json(db.prepare('SELECT * FROM seasons WHERE id = ?').get(season.id));
@@ -124,6 +127,129 @@ router.delete('/seasons/:id', requireAuth, (req, res) => {
   if (!season) return res.status(404).json({ error: 'Season not found' });
   db.prepare('DELETE FROM seasons WHERE id = ?').run(req.params.id);
   res.json({ success: true });
+});
+
+router.post('/seasons/:id/summary', requireAuth, async (req, res) => {
+  const db = getDb();
+  const { getSeasonSettings, calculateScore } = require('../lib/scoring');
+  const season = db.prepare('SELECT * FROM seasons WHERE id = ?').get(req.params.id);
+  if (!season) return res.status(404).json({ error: 'Season not found' });
+  if (season.status !== 'finished') return res.status(400).json({ error: 'Season must be finished before generating a recap' });
+
+  if (!process.env.ANTHROPIC_API_KEY)
+    return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
+
+  const settings  = getSeasonSettings(db, season.id);
+  const allWeeks  = db.prepare('SELECT * FROM weeks WHERE season_id = ? ORDER BY week_number').all(season.id);
+  const totalMatches = db.prepare(`SELECT COUNT(*) AS cnt FROM matches m JOIN weeks w ON w.id = m.week_id WHERE w.season_id = ?`).get(season.id);
+
+  // Final standings
+  const playerRows = db.prepare(`
+    SELECT p.display_name,
+           COUNT(DISTINCT ms.match_id) AS pugs,
+           COALESCE(SUM(ms.flag_capture), 0) AS caps,
+           COALESCE(SUM(ms.flag_assist), 0)  AS assists,
+           COALESCE(SUM(ms.flag_return), 0)  AS returns,
+           COALESCE(SUM(ms.flag_seal), 0)    AS seals,
+           COALESCE(SUM(ms.total_points), 0) AS pts
+    FROM players p
+    JOIN match_stats ms ON ms.player_id = p.id
+    JOIN matches m ON m.id = ms.match_id
+    JOIN weeks w ON w.id = m.week_id
+    WHERE w.season_id = ?
+    GROUP BY p.id
+  `).all(season.id);
+
+  const standings = playerRows.map(r => ({
+    ...r, ...calculateScore(r.pts, r.pugs, settings.participation_bonus_coefficient)
+  })).sort((a, b) => b.score - a.score);
+
+  function rankAtWeeks(weekIds) {
+    if (!weekIds.length) return {};
+    const ph = weekIds.map(() => '?').join(',');
+    const rows = db.prepare(`
+      SELECT p.display_name, COUNT(DISTINCT ms.match_id) AS pugs, COALESCE(SUM(ms.total_points), 0) AS pts
+      FROM players p JOIN match_stats ms ON ms.player_id = p.id JOIN matches m ON m.id = ms.match_id
+      WHERE m.week_id IN (${ph}) GROUP BY p.id
+    `).all(...weekIds);
+    const sorted = rows.map(r => ({ name: r.display_name, score: calculateScore(r.pts, r.pugs, settings.participation_bonus_coefficient).score }))
+                       .sort((a, b) => b.score - a.score);
+    const map = {};
+    sorted.forEach((p, i) => { map[p.name] = i + 1; });
+    return map;
+  }
+
+  // Build cumulative rank journey per player
+  const rankHistories = {};
+  for (let i = 0; i < allWeeks.length; i++) {
+    const map = rankAtWeeks(allWeeks.slice(0, i + 1).map(w => w.id));
+    for (const [name, rank] of Object.entries(map)) {
+      if (!rankHistories[name]) rankHistories[name] = [];
+      rankHistories[name].push(`#${rank}`);
+    }
+  }
+
+  const weekLines = allWeeks.map(w => {
+    const mc = db.prepare('SELECT COUNT(*) AS cnt FROM matches WHERE week_id = ?').get(w.id);
+    return `- Week ${w.week_number}${w.week_date ? ` (${w.week_date})` : ''}: ${mc.cnt} matches`;
+  }).join('\n');
+
+  const standingsLines = standings.map((p, i) => {
+    const journey = (rankHistories[p.display_name] || []).join(' → ') || `#${i + 1}`;
+    return `${i + 1}. ${p.display_name}: ${p.pugs} pugs, ${p.caps} caps, ${p.assists} ast, ${p.seals} seals, ${p.returns} ret, ${p.pts.toFixed(1)} pts, score ${p.score.toFixed(2)} | Rank journey: ${journey}`;
+  }).join('\n');
+
+  const weeksWithSummary = allWeeks.filter(w => w.ai_summary);
+  const weeklySummariesText = weeksWithSummary.length
+    ? '\n\nWEEKLY RECAPS (for context — reference specific moments from these when relevant):\n' +
+      weeksWithSummary.map(w => `--- Week ${w.week_number} ---\n${w.ai_summary}`).join('\n\n')
+    : '';
+
+  const style = req.body.style || 'serious';
+  const styleInstructions = {
+    serious: 'Write in a professional, factual sports journalism style. Reflect on the season arc, key battles, and standout performers. Tone: neutral and informative.',
+    hype:    'Write in an energetic, hype-man style as if wrapping up an entire esports season. High energy, celebrate the champion and the underdogs alike.',
+    funny:   'Write in a humorous, lighthearted style. Look back at the season\'s highs and lows with jokes and playful commentary.',
+    epic:    'Write in an epic, over-the-top dramatic style. This season was a saga. Use grandiose language, metaphors, and hyperbole.',
+  };
+  const toneInstruction = styleInstructions[style] || styleInstructions.serious;
+
+  const system = `You are writing a season-end recap for a CTF (Capture the Flag) ladder based on Unreal Tournament pick-up games (PUGs). Players join a pool and are split into two random teams each match — so team affiliation is meaningless and changes every game. Never mention team colors (Red/Blue), never use the word "faction", and never frame results around teams. Focus on individual players: their season-long stats, how their rankings evolved week by week, rivalries, and standout moments. Mention a good spread of players by name — not just the winner, but also mid-table players and those who improved or struggled over the season. Readers love seeing their own name. Aim for roughly half the player pool, spread naturally across the paragraphs. Write in flowing prose, 3–4 paragraphs. No bullet points, no headers. Wrap every player name in **double asterisks** — e.g. **PlayerName** — every time it appears.`;
+
+  const userPrompt = `Write a season-end recap for the data below. ${toneInstruction}
+
+Season: ${season.name} — ${allWeeks.length} weeks, ${totalMatches.cnt} total matches
+
+WEEKS:
+${weekLines || '(none)'}
+
+FINAL STANDINGS (with cumulative rank journey across weeks):
+${standingsLines || '(none)'}${weeklySummariesText}`;
+
+  try {
+    const Anthropic = require('@anthropic-ai/sdk');
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const msg = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1000,
+      system,
+      messages: [{ role: 'user', content: userPrompt }]
+    });
+    const summary = msg.content[0].text.trim();
+    db.prepare("UPDATE seasons SET ai_summary = ?, ai_summary_generated_at = datetime('now') WHERE id = ?").run(summary, season.id);
+    res.json({ summary });
+  } catch (err) {
+    console.error('AI season summary error:', err.message);
+    res.status(500).json({ error: 'Failed to generate summary: ' + err.message });
+  }
+});
+
+router.delete('/seasons/:id/summary', requireAuth, (req, res) => {
+  const db = getDb();
+  if (!db.prepare('SELECT id FROM seasons WHERE id = ?').get(req.params.id))
+    return res.status(404).json({ error: 'Season not found' });
+  db.prepare('UPDATE seasons SET ai_summary = NULL, ai_summary_generated_at = NULL WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
 });
 
 // GET /api/admin/recent-matches

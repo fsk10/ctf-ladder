@@ -44,22 +44,56 @@
 </div>
 <script src="/admin/common.js"></script>
 <script>
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
 async function loadList() {
   const seasons = await (await fetch('/api/admin/seasons')).json();
-  const rows = seasons.map(s => `
+  const rows = seasons.map(s => {
+    const isActive   = s.status === 'active';
+    const isFinished = s.status === 'finished' && !s.archived;
+    const isArchived = s.status === 'finished' && s.archived;
+    const badge = isActive
+      ? '<span class="badge badge-green">Active</span>'
+      : isFinished
+        ? '<span class="badge" style="background:#b07d2a;color:#fff">Finished</span>'
+        : '<span class="badge badge-gray">Archived</span>';
+    const hasSummary = !!s.ai_summary;
+    return `
     <tr>
-      <td>${s.name}</td>
-      <td>${s.status === 'active' ? '<span class="badge badge-green">Active</span>' : '<span class="badge badge-gray">Finished</span>'}</td>
+      <td>${esc(s.name)}</td>
+      <td>${badge}${hasSummary ? ' <span class="badge badge-green" style="font-size:.7rem">AI</span>' : ''}</td>
       <td class="num">${s.week_count}</td>
       <td class="num">${s.match_count}</td>
       <td>${s.created_at.split('T')[0]}</td>
-      <td>
-        ${s.status === 'active'
-          ? `<button class="btn btn-danger btn-sm" onclick="finishSeason(${s.id})">Finish season</button>`
-          : `<button class="btn btn-outline btn-sm" onclick="reactivateSeason(${s.id})">Re-activate</button>`}
+      <td style="white-space:nowrap">
+        ${isActive ? `<button class="btn btn-danger btn-sm" onclick="finishSeason(${s.id})">Finish Season</button>` : ''}
+        ${isFinished ? `
+          <button class="btn btn-outline btn-sm" title="Generate AI Recap" onclick="toggleSeasonAiRow(${s.id})">AI Recap</button>
+          <button class="btn btn-primary btn-sm" onclick="archiveSeason(${s.id})">Archive</button>
+        ` : ''}
+        ${isArchived ? `<button class="btn btn-outline btn-sm" onclick="unarchiveSeason(${s.id})">Unarchive</button>` : ''}
+        ${!isActive && !isArchived ? `<button class="btn btn-outline btn-sm" onclick="reactivateSeason(${s.id})">Re-activate</button>` : ''}
         <button class="btn btn-danger btn-sm" onclick="deleteSeason(${s.id}, '${s.name.replace(/'/g, "\\'")}')">Delete</button>
       </td>
-    </tr>`).join('');
+    </tr>
+    <tr id="season-ai-${s.id}" style="display:none;background:#f0f4f0">
+      <td colspan="6" style="padding:.75rem 1rem">
+        <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+          <label style="font-weight:600;font-size:.88rem">Style:</label>
+          <select id="season-style-${s.id}" style="padding:.38rem .6rem;font-size:.88rem;border:1px solid #ccc;border-radius:4px;background:#fff">
+            <option value="serious">Serious</option>
+            <option value="hype">Hype</option>
+            <option value="funny">Funny</option>
+            <option value="epic">Epic</option>
+          </select>
+          <button id="season-gen-btn-${s.id}" class="btn btn-success btn-sm" onclick="generateSeasonSummary(${s.id})">${hasSummary ? 'Regenerate' : 'Generate'}</button>
+          ${hasSummary ? `<button class="btn btn-danger btn-sm" onclick="deleteSeasonSummary(${s.id})">Delete recap</button>` : ''}
+          <button class="btn btn-secondary btn-sm" onclick="toggleSeasonAiRow(${s.id})">Cancel</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
   document.getElementById('list').innerHTML = `
     <div class="table-wrap">
       <table>
@@ -88,11 +122,31 @@ async function createSeason() {
 }
 
 async function finishSeason(id) {
-  if (!confirm('Mark this season as finished?')) return;
+  if (!confirm('Mark this season as finished? It will remain visible on the standings page until you move it to history.')) return;
   const res = await fetch(`/api/admin/seasons/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status: 'finished' })
+  });
+  if (res.ok) loadList();
+}
+
+async function archiveSeason(id) {
+  if (!confirm('Archive this season? It will move to the history page and no longer appear on standings.')) return;
+  const res = await fetch(`/api/admin/seasons/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ archived: true })
+  });
+  if (res.ok) loadList();
+}
+
+async function unarchiveSeason(id) {
+  if (!confirm('Unarchive this season? It will reappear on the standings page as "Season Over".')) return;
+  const res = await fetch(`/api/admin/seasons/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ archived: false })
   });
   if (res.ok) loadList();
 }
@@ -110,6 +164,36 @@ async function reactivateSeason(id) {
 async function deleteSeason(id, name) {
   if (!confirm(`Delete "${name}" and ALL its weeks, matches and stats?\n\nThis cannot be undone.`)) return;
   const res = await fetch(`/api/admin/seasons/${id}`, { method: 'DELETE' });
+  if (res.ok) loadList();
+}
+
+function toggleSeasonAiRow(id) {
+  const row = document.getElementById(`season-ai-${id}`);
+  row.style.display = row.style.display === 'none' ? '' : 'none';
+}
+
+async function generateSeasonSummary(id) {
+  const btn   = document.getElementById(`season-gen-btn-${id}`);
+  const style = document.getElementById(`season-style-${id}`)?.value || 'serious';
+  btn.disabled = true;
+  btn.textContent = 'Generating…';
+  const res = await fetch(`/api/admin/seasons/${id}/summary`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ style })
+  });
+  if (res.ok) { loadList(); }
+  else {
+    const d = await res.json();
+    alert('Error: ' + d.error);
+    btn.disabled = false;
+    btn.textContent = 'Generate';
+  }
+}
+
+async function deleteSeasonSummary(id) {
+  if (!confirm('Delete AI recap for this season?')) return;
+  const res = await fetch(`/api/admin/seasons/${id}/summary`, { method: 'DELETE' });
   if (res.ok) loadList();
 }
 

@@ -32,10 +32,12 @@ const dateRange = s => {
   return null;
 };
 
-let allHistory = [];
-let currentStandings = [];
+let allHistory        = [];
+let currentHistSeason = null;
+let activeHistTab     = 'final';
+let currentStandings  = [];
 let currentMinMatches = 0;
-let viewMode = localStorage.getItem('standingsView') === 'raw' ? 'raw' : 'points';
+let viewMode  = localStorage.getItem('standingsView') === 'raw' ? 'raw' : 'points';
 let sortState = { col: 'score', dir: -1 };
 
 function applyViewClass() {
@@ -85,7 +87,7 @@ function viewToggleHTML() {
   </div>`;
 }
 
-function tableHeaders() {
+function tableHeaders(scoreLabel = 'Final Score') {
   if (viewMode === 'points') {
     return `<th class="num">#</th>
       ${th('Player', 'display_name', true)}
@@ -93,7 +95,7 @@ function tableHeaders() {
       ${th('Total Pts', 'total_points', false, 'Total points earned')}
       ${th('Avg Pts/Pug', 'avg_points_per_pug', false, 'Average points per pug')}
       ${th('Part. Bonus', 'participation_bonus', false, 'Participation bonus (2.5 × √pugs)')}
-      ${th('Final Score', 'score', false, 'Final score = (total pts / pugs) + participation bonus')}`;
+      ${th(scoreLabel, 'score', false, 'Final score = (total pts / pugs) + participation bonus')}`;
   } else {
     return `<th class="num">#</th>
       ${th('Player', 'display_name', true)}
@@ -113,16 +115,18 @@ function tableHeaders() {
   }
 }
 
-function tableRow(p, rank, provisional = false) {
+function tableRow(p, rank, provisional = false, showMedals = false) {
   const cls = provisional ? ' class="provisional-row"' : '';
-  const medalEmoji = !provisional && rank === 1 ? '🏆' : !provisional && rank === 2 ? '🥈' : !provisional && rank === 3 ? '🥉' : '';
+  const medalEmoji = showMedals && !provisional
+    ? (rank === 1 ? '🏆' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '') : '';
   const medal = medalEmoji ? ` <span class="trophy">${medalEmoji}</span>` : '';
   const rankCell = provisional ? '—' : rank;
+  const pugs = p.total_pugs ?? p.pugs_played;
   if (viewMode === 'points') {
     return `<tr${cls}>
       <td class="rank">${rankCell}</td>
       <td><a href="/player/${p.player_id}">${esc(p.display_name)}</a>${medal}</td>
-      <td class="num">${p.total_pugs}</td>
+      <td class="num">${pugs}</td>
       <td class="num">${fmt(p.total_points)}</td>
       <td class="num">${fmt(p.avg_points_per_pug)}</td>
       <td class="num">${fmt(p.participation_bonus)}</td>
@@ -132,7 +136,7 @@ function tableRow(p, rank, provisional = false) {
     return `<tr${cls}>
       <td class="rank">${rankCell}</td>
       <td><a href="/player/${p.player_id}">${esc(p.display_name)}</a>${medal}</td>
-      <td class="num">${p.total_pugs}</td>
+      <td class="num">${pugs}</td>
       <td class="num">${p.draws}</td>
       <td class="num">${p.wins}</td>
       <td class="num">${p.wins_by3}</td>
@@ -154,27 +158,69 @@ function provisionalDivider() {
   return `<tr class="provisional-divider"><td colspan="${colCount}"></td></tr>`;
 }
 
-function standingsTableHTML(standings) {
+function standingsTableHTML(standings, scoreLabel = 'Final Score', minMatches = 0, showMedals = false) {
   if (!standings.length) return '<p class="text-muted">No data.</p>';
   const sorted = sortedData(standings);
-  const threshold = Math.round(currentMinMatches);
+  const threshold = Math.round(minMatches);
   if (threshold > 1) {
-    const qualified   = sorted.filter(p => p.total_pugs >= threshold);
-    const provisional = sorted.filter(p => p.total_pugs < threshold);
-    const qualRows  = qualified.map((p, i) => tableRow(p, i + 1)).join('');
-    const provRows  = provisional.map(p => tableRow(p, '—', true)).join('');
+    const qualified   = sorted.filter(p => (p.total_pugs ?? p.pugs_played) >= threshold);
+    const provisional = sorted.filter(p => (p.total_pugs ?? p.pugs_played) < threshold);
+    const qualRows  = qualified.map((p, i) => tableRow(p, i + 1, false, showMedals)).join('');
+    const provRows  = provisional.map(p => tableRow(p, '—', true, false)).join('');
     const divider   = provisional.length ? provisionalDivider() : '';
     return `<div class="table-wrap"><table>
-      <thead><tr>${tableHeaders()}</tr></thead>
+      <thead><tr>${tableHeaders(scoreLabel)}</tr></thead>
       <tbody>${qualRows}${divider}${provRows}</tbody>
     </table></div>`;
   }
-  const rows = sorted.map((p, i) => tableRow(p, i + 1)).join('');
+  const rows = sorted.map((p, i) => tableRow(p, i + 1, false, showMedals)).join('');
   return `<div class="table-wrap"><table>
-    <thead><tr>${tableHeaders()}</tr></thead>
+    <thead><tr>${tableHeaders(scoreLabel)}</tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
 }
+
+function matchesHTML(matches) {
+  if (!matches || !matches.length) return '';
+  const rows = matches.map(m => `
+    <tr>
+      <td>${m.match_date || '—'}</td>
+      <td><a href="/match/${m.id}">${esc(m.map || 'Unknown map')}</a></td>
+      <td>${esc(m.server || '—')}</td>
+      <td class="num"><span class="team-red">${m.red_score}</span> : <span class="team-blue">${m.blue_score}</span></td>
+    </tr>`).join('');
+  return `<h3>Matches (${matches.length})</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Date</th><th>Map</th><th>Server</th><th class="num">Score</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>`;
+}
+
+function recapToggleHTML(id, label, color, text) {
+  const extraClass = color === '#b07d2a' ? ' season-summary-card' : '';
+  const paras = text.split(/\n\n+/).map(p => {
+    const escaped = esc(p).replace(/\n/g, '<br>');
+    return `<p>${escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')}</p>`;
+  }).join('');
+  return `<div style="margin-bottom:1rem">
+    <div onclick="toggleHistoryRecap('${id}')" style="display:inline-flex;align-items:center;gap:.45rem;cursor:pointer;user-select:none;font-size:.88rem;font-weight:600;color:${color}">
+      <span id="${id}-icon">▶</span> ${label}
+    </div>
+    <div id="${id}" style="display:none;margin-top:.6rem">
+      <div class="week-summary-card${extraClass}"><div class="week-summary-body">${paras}</div></div>
+    </div>
+  </div>`;
+}
+
+function toggleHistoryRecap(id) {
+  const body = document.getElementById(id);
+  const icon = document.getElementById(id + '-icon');
+  const expanded = body.style.display !== 'none';
+  body.style.display = expanded ? 'none' : '';
+  icon.textContent   = expanded ? '▶' : '▼';
+}
+
+// ===== Data loading =====
 
 async function load() {
   allHistory = await (await fetch('/api/season-history')).json();
@@ -206,36 +252,87 @@ function renderSelector(selectedId) {
     </div>`;
 }
 
+async function ensureSeasonData(season) {
+  if (season._loaded) return;
+  const [{ standings, min_matches }, { weeks }] = await Promise.all([
+    (await fetch(`/api/standings?season_id=${season.id}`)).json(),
+    (await fetch(`/api/season/${season.id}/weeks`)).json()
+  ]);
+  season._standings  = standings;
+  season._minMatches = min_matches || 0;
+  season._weeks      = weeks;
+  season._weekData   = {};
+  season._loaded     = true;
+}
+
 async function onSeasonChange(id) {
   window.location.hash = id;
+  activeHistTab = 'final';
   const season = allHistory.find(s => s.id == id);
-  if (!season._standings) {
-    const { standings, min_matches } = await (await fetch(`/api/standings?season_id=${id}`)).json();
-    season._standings  = standings;
-    season._minMatches = min_matches || 0;
-  }
+  await ensureSeasonData(season);
+  currentHistSeason = season;
   renderSeasonContent(season);
 }
 
 async function renderSeason(season) {
-  if (!season._standings) {
-    const { standings, min_matches } = await (await fetch(`/api/standings?season_id=${season.id}`)).json();
-    season._standings  = standings;
-    season._minMatches = min_matches || 0;
-  }
+  await ensureSeasonData(season);
+  currentHistSeason = season;
   renderSeasonContent(season);
 }
 
+// ===== Tab rendering =====
+
 function renderSeasonContent(season) {
+  const weeks = [...(season._weeks || [])].reverse(); // newest first
+  const tabsHTML = `<div class="tabs">
+    <div class="tab${activeHistTab === 'final' ? ' active' : ''}" onclick="switchHistTab('final')">Final Standings</div>
+    ${weeks.map(w => `<div class="tab${activeHistTab === 'week-'+w.id ? ' active' : ''}" onclick="switchHistTab('week-${w.id}')">Week ${w.week_number}</div>`).join('')}
+  </div>`;
+
+  document.getElementById('seasonContent').innerHTML = `
+    ${tabsHTML}
+    <div id="histTabContent"></div>`;
+
+  renderHistTabContent(season);
+}
+
+function renderHistTabContent(season) {
+  if (activeHistTab === 'final') {
+    renderFinalTab(season);
+  } else {
+    const weekId = activeHistTab.replace('week-', '');
+    const cached = season._weekData[weekId];
+    if (cached) {
+      renderWeekTab(cached);
+    } else {
+      document.getElementById('histTabContent').innerHTML = '<p class="loading">Loading…</p>';
+      fetchWeekTab(weekId, season);
+    }
+  }
+}
+
+async function switchHistTab(tabId) {
+  activeHistTab = tabId;
+  sortState = { col: tabId === 'final' ? 'score' : 'score', dir: -1 };
+  renderSeasonContent(currentHistSeason);
+}
+
+async function fetchWeekTab(weekId, season) {
+  const { standings, matches, week } = await (await fetch(`/api/week/${weekId}`)).json();
+  const normalized = standings.map(p => ({ ...p, total_pugs: p.pugs_played ?? p.total_pugs }));
+  season._weekData[weekId] = { standings: normalized, matches, week };
+  // Only render if this tab is still active
+  if (activeHistTab === 'week-' + weekId) renderWeekTab(season._weekData[weekId]);
+}
+
+function renderFinalTab(season) {
   const standings = season._standings || [];
   currentStandings  = standings;
   currentMinMatches = season._minMatches || 0;
 
-  const winner = standings[0];
-  const second = standings[1];
-  const third  = standings[2];
-
+  const winner = standings[0], second = standings[1], third = standings[2];
   const range = dateRange(season);
+
   const winnerHTML = winner ? `
     <div class="winner-card">
       <div class="winner-trophy">🏆</div>
@@ -254,14 +351,38 @@ function renderSeasonContent(season) {
       <div class="score">${fmt(p.score)} &nbsp;·&nbsp; ${p.total_pugs} pugs</div>
     </div>`).join('');
 
-  document.getElementById('seasonContent').innerHTML = `
+  const recapHTML = season.ai_summary
+    ? recapToggleHTML('hist-season-recap', 'Season Recap', '#b07d2a', season.ai_summary)
+    : '';
+
+  document.getElementById('histTabContent').innerHTML = `
     ${winnerHTML}
     ${standings.length > 1 ? `<div class="podium-row">${podiumCards}</div>` : ''}
+    ${recapHTML}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
       <h2 style="margin:0">Final Standings</h2>
       ${viewToggleHTML()}
     </div>
-    <div id="standingsContainer">${standingsTableHTML(standings)}</div>`;
+    <div id="standingsContainer">${standingsTableHTML(standings, 'Final Score', currentMinMatches, true)}</div>`;
+}
+
+function renderWeekTab(weekData) {
+  const standings = weekData.standings || [];
+  currentStandings  = standings;
+  currentMinMatches = 0;
+
+  const recapHTML = weekData.week?.ai_summary
+    ? recapToggleHTML(`hist-week-${weekData.week.id}`, `Week ${weekData.week.week_number} Recap`, '#0069c0', weekData.week.ai_summary)
+    : '';
+
+  document.getElementById('histTabContent').innerHTML = `
+    ${recapHTML}
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+      <h2 style="margin:0">Week ${weekData.week.week_number}</h2>
+      ${viewToggleHTML()}
+    </div>
+    <div id="standingsContainer">${standingsTableHTML(standings, 'Weekly Score')}</div>
+    ${matchesHTML(weekData.matches)}`;
 }
 
 load();

@@ -3,9 +3,9 @@ const router = express.Router();
 const { getDb } = require('../db/database');
 const { getSettings, getSeasonSettings, calculateScore, getMatchBreakdown } = require('../lib/scoring');
 
-// Helper: returns { player_id -> [season_name, ...] } for all finished seasons
+// Helper: returns { player_id -> [season_name, ...] } for all archived seasons
 function getSeasonWinnerMap(db, coefficient = 2.5) {
-  const finished = db.prepare("SELECT id, name FROM seasons WHERE status='finished'").all();
+  const finished = db.prepare("SELECT id, name FROM seasons WHERE status='finished' AND archived=1").all();
   const map = {};
   for (const s of finished) {
     const rows = db.prepare(`
@@ -32,7 +32,7 @@ router.get('/standings', (req, res) => {
   const db = getDb();
   const season = req.query.season_id
     ? db.prepare('SELECT * FROM seasons WHERE id = ?').get(req.query.season_id)
-    : db.prepare("SELECT * FROM seasons WHERE status='active' ORDER BY id DESC LIMIT 1").get();
+    : db.prepare("SELECT * FROM seasons WHERE (status='active' OR (status='finished' AND archived=0)) ORDER BY id DESC LIMIT 1").get();
   if (!season) return res.json({ season: null, standings: [] });
 
   const settings = getSeasonSettings(db, season.id);
@@ -145,10 +145,10 @@ router.get('/seasons', (req, res) => {
   res.json(seasons);
 });
 
-// GET /api/season-history  — finished seasons with top 3 per season
+// GET /api/season-history  — archived seasons with top 3 per season
 router.get('/season-history', (req, res) => {
   const db = getDb();
-  const finished = db.prepare("SELECT * FROM seasons WHERE status='finished' ORDER BY id DESC").all();
+  const finished = db.prepare("SELECT * FROM seasons WHERE status='finished' AND archived=1 ORDER BY id DESC").all();
   const history = finished.map(s => {
     const sSettings = getSeasonSettings(db, s.id);
     const rows = db.prepare(`

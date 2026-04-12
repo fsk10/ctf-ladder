@@ -339,6 +339,8 @@ thead th[onclick]:hover { background: #2a2a4e; }
 
 /* WEEK SUMMARY CARD */
 .week-summary-card { background: #fff; border-radius: 6px; border-left: 3px solid #0069c0; padding: 1rem 1.25rem; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 1.25rem; }
+.season-summary-card { border-left-color: #b07d2a; }
+.season-summary-card .week-summary-title { color: #b07d2a; }
 .week-summary-title { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: #0069c0; margin-bottom: .6rem; }
 .week-summary-body p { color: #333; line-height: 1.7; font-size: .9rem; margin-bottom: .65rem; }
 .week-summary-body p:last-child { margin-bottom: 0; }

@@ -104,6 +104,11 @@ function initDatabase() {
   if (!weekCols.includes('ai_summary'))              db.exec("ALTER TABLE weeks ADD COLUMN ai_summary TEXT");
   if (!weekCols.includes('ai_summary_generated_at')) db.exec("ALTER TABLE weeks ADD COLUMN ai_summary_generated_at TEXT");
 
+  const seasonCols2 = db.prepare("PRAGMA table_info(seasons)").all().map(c => c.name);
+  if (!seasonCols2.includes('archived'))                db.exec("ALTER TABLE seasons ADD COLUMN archived INTEGER NOT NULL DEFAULT 0");
+  if (!seasonCols2.includes('ai_summary'))              db.exec("ALTER TABLE seasons ADD COLUMN ai_summary TEXT");
+  if (!seasonCols2.includes('ai_summary_generated_at')) db.exec("ALTER TABLE seasons ADD COLUMN ai_summary_generated_at TEXT");
+
   const insert = db.prepare('INSERT OR IGNORE INTO scoring_settings (key, value) VALUES (?, ?)');
   const seed = db.transaction(() => {
     for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) insert.run(k, v);
