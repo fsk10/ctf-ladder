@@ -86,6 +86,13 @@ function initDatabase() {
       PRIMARY KEY (season_id, key)
     );
 
+    CREATE TABLE IF NOT EXISTS player_notes (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      player_id  INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+      note       TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS login_attempts (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
       ip           TEXT NOT NULL,

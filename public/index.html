@@ -24,6 +24,7 @@
 <script>
 const fmt = (n, d=2) => (typeof n === 'number' && isFinite(n)) ? n.toFixed(d) : '—';
 const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const fmtDatetime = iso => { if (!iso) return '—'; const d = new Date(iso), p = n => String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
 
 let currentSeason    = null;
 let currentWeeks     = [];
@@ -62,11 +63,12 @@ function seasonSummaryHTML(season) {
     const bolded  = escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     return `<p>${bolded}</p>`;
   }).join('');
+  const open = recapIsExpanded('season-recap', true);
   return `<div style="margin-bottom:1rem">
     <div onclick="toggleRecap('season-recap')" style="display:inline-flex;align-items:center;gap:.45rem;cursor:pointer;user-select:none;font-size:.88rem;font-weight:600;color:#b07d2a">
-      <span id="season-recap-icon">▼</span> Season Recap
+      <span id="season-recap-icon">${open ? '▼' : '▶'}</span> Season Recap
     </div>
-    <div id="season-recap">
+    <div id="season-recap" style="${open ? '' : 'display:none'}">
       <div class="week-summary-card season-summary-card" style="margin-top:.6rem">
         <div class="week-summary-body">${paras}</div>
       </div>
@@ -83,11 +85,12 @@ function weekSummaryHTML(weekData) {
     return `<p>${bolded}</p>`;
   }).join('');
   const id = `week-recap-${weekData.week.id}`;
+  const open = recapIsExpanded(id, true);
   return `<div style="margin-bottom:1rem">
     <div onclick="toggleRecap('${id}')" style="display:inline-flex;align-items:center;gap:.45rem;cursor:pointer;user-select:none;font-size:.88rem;font-weight:600;color:#0069c0">
-      <span id="${id}-icon">▼</span> Week ${esc(String(weekData.week.week_number))} Recap
+      <span id="${id}-icon">${open ? '▼' : '▶'}</span> Week ${esc(String(weekData.week.week_number))} Recap
     </div>
-    <div id="${id}">
+    <div id="${id}" style="${open ? '' : 'display:none'}">
       <div class="week-summary-card" style="margin-top:.6rem">
         <div class="week-summary-body">${paras}</div>
       </div>
@@ -311,7 +314,7 @@ function matchesHTML(matches) {
   if (!matches || !matches.length) return '';
   const rows = matches.map(m => `
     <tr>
-      <td>${m.match_date || '—'}</td>
+      <td>${fmtDatetime(m.match_date)}</td>
       <td><a href="/match/${m.id}">${esc(m.map || 'Unknown map')}</a></td>
       <td>${esc(m.server || '—')}</td>
       <td class="num"><span class="team-red">${m.red_score}</span> : <span class="team-blue">${m.blue_score}</span></td>
@@ -373,6 +376,12 @@ function toggleRecap(id) {
   const expanded = body.style.display !== 'none';
   body.style.display = expanded ? 'none' : '';
   icon.textContent   = expanded ? '▶' : '▼';
+  localStorage.setItem('recap:' + id, expanded ? '0' : '1');
+}
+
+function recapIsExpanded(id, defaultExpanded = true) {
+  const saved = localStorage.getItem('recap:' + id);
+  return saved !== null ? saved === '1' : defaultExpanded;
 }
 
 function showRankTooltip(arrow, history) {

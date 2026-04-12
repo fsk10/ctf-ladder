@@ -72,6 +72,7 @@ app.get('/admin/players',      (_, res) => res.sendFile(path.join(__dirname, 'pu
 app.get('/admin/weeks',        (_, res) => res.sendFile(path.join(__dirname, 'public', 'admin', 'weeks.html')));
 app.get('/admin/seasons',      (_, res) => res.sendFile(path.join(__dirname, 'public', 'admin', 'seasons.html')));
 app.get('/admin/settings',     (_, res) => res.sendFile(path.join(__dirname, 'public', 'admin', 'settings.html')));
+app.get('/admin/notes',        (_, res) => res.sendFile(path.join(__dirname, 'public', 'admin', 'notes.html')));
 app.get('/admin/security',     (_, res) => res.sendFile(path.join(__dirname, 'public', 'admin', 'security.html')));
 
 // API routes

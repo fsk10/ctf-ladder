@@ -205,6 +205,19 @@ router.post('/seasons/:id/summary', requireAuth, async (req, res) => {
       weeksWithSummary.map(w => `--- Week ${w.week_number} ---\n${w.ai_summary}`).join('\n\n')
     : '';
 
+  // Player notes for all season participants
+  const seasonPlayerNames = standings.map(p => p.display_name);
+  const seasonNotes = seasonPlayerNames.length ? db.prepare(`
+    SELECT p.display_name, pn.note
+    FROM player_notes pn JOIN players p ON p.id = pn.player_id
+    WHERE p.display_name IN (${seasonPlayerNames.map(() => '?').join(',')})
+    ORDER BY p.display_name
+  `).all(...seasonPlayerNames) : [];
+  const seasonNotesText = seasonNotes.length
+    ? '\n\nPLAYER NOTES (fun facts/anecdotes — weave in naturally where the season stats support it; the weekly recaps above may have already referenced some of these, so avoid repeating the same angle):\n' +
+      seasonNotes.map(n => `- ${n.display_name}: ${n.note}`).join('\n')
+    : '';
+
   const style = req.body.style || 'serious';
   const styleInstructions = {
     serious: 'Write in a professional, factual sports journalism style. Reflect on the season arc, key battles, and standout performers. Tone: neutral and informative.',
@@ -224,7 +237,7 @@ WEEKS:
 ${weekLines || '(none)'}
 
 FINAL STANDINGS (with cumulative rank journey across weeks):
-${standingsLines || '(none)'}${weeklySummariesText}`;
+${standingsLines || '(none)'}${seasonNotesText}${weeklySummariesText}`;
 
   try {
     const Anthropic = require('@anthropic-ai/sdk');
@@ -412,6 +425,20 @@ router.post('/weeks/:id/summary', requireAuth, async (req, res) => {
     return `- ${p.display_name}: ${p.pugs} pugs, ${p.caps} caps, ${p.assists} ast, ${p.seals} seals, ${p.returns} ret, ${p.wins}W/${p.draws}D, ${p.pts.toFixed(1)} pts | Standing: ${rankStr}${mapDetail ? '\n' + mapDetail : ''}`;
   }).join('\n');
 
+  // Player notes for participants this week
+  const participantNames = playerRows.map(p => p.display_name);
+  const playerNotes = participantNames.length ? db.prepare(`
+    SELECT p.display_name, pn.note
+    FROM player_notes pn JOIN players p ON p.id = pn.player_id
+    WHERE p.display_name IN (${participantNames.map(() => '?').join(',')})
+    ORDER BY p.display_name
+  `).all(...participantNames) : [];
+
+  // Up to 2 previous week summaries for context (avoid repeating angles)
+  const prevWeeks = allWeeks.slice(Math.max(0, thisIdx - 2), thisIdx)
+    .map(w => db.prepare('SELECT week_number, ai_summary FROM weeks WHERE id = ?').get(w.id))
+    .filter(w => w.ai_summary);
+
   const style = req.body.style || 'serious';
   const styleInstructions = {
     serious: 'Write in a professional, factual sports journalism style. Focus on individual performances, key stats, and ranking changes. Tone: neutral and informative.',
@@ -423,6 +450,16 @@ router.post('/weeks/:id/summary', requireAuth, async (req, res) => {
 
   const system = `You are writing weekly recaps for a CTF (Capture the Flag) ladder based on Unreal Tournament pick-up games (PUGs). Players join a pool and are split into two random teams each match — so team affiliation is meaningless and changes every game. Never mention team colors (Red/Blue), never use the word "faction", and never frame results around teams. Focus entirely on individual players: their stats, ranking movement, and any map-specific patterns. Refer to matches simply as "games" or "matches". Mention a good spread of players by name — not just the top performers, but also mid-table players and those who struggled. Readers love seeing their own name. Aim for roughly half the player pool, spread naturally across the paragraphs. Write in flowing prose, 2–3 paragraphs. No bullet points, no headers. Wrap every player name in **double asterisks** — e.g. **PlayerName** — every time it appears.`;
 
+  const notesSection = playerNotes.length
+    ? '\n\nPLAYER NOTES (fun facts/anecdotes — use only if there is a natural or funny connection to what actually happened this week; do not force it; avoid repeating angles already covered in previous recaps below):\n' +
+      playerNotes.map(n => `- ${n.display_name}: ${n.note}`).join('\n')
+    : '';
+
+  const prevRecapsSection = prevWeeks.length
+    ? '\n\nPREVIOUS RECAPS (for context — avoid repeating the same angles or jokes):\n' +
+      prevWeeks.map(w => `--- Week ${w.week_number} ---\n${w.ai_summary}`).join('\n\n')
+    : '';
+
   const userPrompt = `Write a weekly recap for the data below. ${toneInstruction}
 
 Season: ${week.season_name} — Week ${week.week_number}${week.week_date ? ` (${week.week_date})` : ''}
@@ -431,7 +468,7 @@ MAPS PLAYED:
 ${matchLines || '(none)'}
 
 PLAYER PERFORMANCES (sorted by points, best first):
-${statsLines || '(none)'}`;
+${statsLines || '(none)'}${notesSection}${prevRecapsSection}`;
 
   try {
     const Anthropic = require('@anthropic-ai/sdk');
@@ -514,6 +551,12 @@ router.post('/fetch-match-data', requireAuth, async (req, res) => {
   const existing = db.prepare('SELECT id FROM matches WHERE api_url = ?').get(normalizedUrl);
   if (existing) return res.status(400).json({ error: 'This match has already been imported' });
 
+  const { week_id: fetchWeekId } = req.body;
+  if (fetchWeekId) {
+    const fetchWeek = db.prepare('SELECT w.id, s.status FROM weeks w JOIN seasons s ON s.id = w.season_id WHERE w.id = ?').get(fetchWeekId);
+    if (fetchWeek && fetchWeek.status !== 'active') return res.status(400).json({ error: 'Cannot import to a finished season' });
+  }
+
   let matchData;
   try {
     const response = await fetch(normalizedUrl, { signal: AbortSignal.timeout(10000) });
@@ -588,8 +631,9 @@ router.post('/import-match', requireAuth, (req, res) => {
   const { week_id, url, matchInfo, players } = req.body;
   if (!week_id || !url || !matchInfo || !players) return res.status(400).json({ error: 'Missing required fields' });
 
-  const week = db.prepare('SELECT * FROM weeks WHERE id = ?').get(week_id);
+  const week = db.prepare('SELECT w.*, s.status AS season_status FROM weeks w JOIN seasons s ON s.id = w.season_id WHERE w.id = ?').get(week_id);
   if (!week) return res.status(404).json({ error: 'Week not found' });
+  if (week.season_status !== 'active') return res.status(400).json({ error: 'Cannot import to a finished season' });
 
   for (const p of players) {
     if (!p.player_id && !p.new_player_name?.trim()) {
@@ -936,6 +980,36 @@ router.get('/backup', requireAuth, (req, res) => {
       });
     })
     .catch(err => res.status(500).json({ error: err.message }));
+});
+
+// ===== PLAYER NOTES =====
+
+router.get('/player-notes', requireAuth, (req, res) => {
+  const db = getDb();
+  const notes = db.prepare(`
+    SELECT pn.*, p.display_name
+    FROM player_notes pn JOIN players p ON p.id = pn.player_id
+    ORDER BY p.display_name COLLATE NOCASE, pn.created_at
+  `).all();
+  res.json(notes);
+});
+
+router.post('/player-notes', requireAuth, (req, res) => {
+  const db = getDb();
+  const { player_id, note } = req.body;
+  if (!player_id || !note?.trim()) return res.status(400).json({ error: 'player_id and note required' });
+  if (!db.prepare('SELECT id FROM players WHERE id = ?').get(player_id))
+    return res.status(404).json({ error: 'Player not found' });
+  const r = db.prepare('INSERT INTO player_notes (player_id, note) VALUES (?, ?)').run(player_id, note.trim());
+  res.json(db.prepare('SELECT pn.*, p.display_name FROM player_notes pn JOIN players p ON p.id = pn.player_id WHERE pn.id = ?').get(r.lastInsertRowid));
+});
+
+router.delete('/player-notes/:id', requireAuth, (req, res) => {
+  const db = getDb();
+  if (!db.prepare('SELECT id FROM player_notes WHERE id = ?').get(req.params.id))
+    return res.status(404).json({ error: 'Note not found' });
+  db.prepare('DELETE FROM player_notes WHERE id = ?').run(req.params.id);
+  res.json({ success: true });
 });
 
 module.exports = router;

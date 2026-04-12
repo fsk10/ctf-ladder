@@ -16,6 +16,7 @@
   <a href="/admin/players">Players</a>
   <a href="/admin/import">Import</a>
   <a href="/admin/settings">Settings</a>
+  <a href="/admin/notes">Notes</a>
   <a href="/admin/security">Security</a>
   <span class="nav-right">
     <a href="/">Public</a>
@@ -107,12 +108,17 @@ let allPlayers = [];
 const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
 async function loadWeeks() {
-  const weeks = await (await fetch('/api/admin/weeks')).json();
+  const [weeks, seasons] = await Promise.all([
+    (await fetch('/api/admin/weeks')).json(),
+    (await fetch('/api/admin/seasons')).json()
+  ]);
+  const activeSeasonIds = new Set(seasons.filter(s => s.status === 'active').map(s => s.id));
+  const activeWeeks = weeks.filter(w => activeSeasonIds.has(w.season_id));
   const params = new URLSearchParams(window.location.search);
   const preselect = params.get('week_id');
-  document.getElementById('weekSel').innerHTML = weeks.map(w =>
+  document.getElementById('weekSel').innerHTML = activeWeeks.map(w =>
     `<option value="${w.id}" ${w.id == preselect ? 'selected' : ''}>${w.season_name} — Week ${w.week_number}${w.week_date ? ' ('+w.week_date+')' : ''}</option>`
-  ).join('') || '<option disabled>No weeks — create one first</option>';
+  ).join('') || '<option disabled>No active season weeks — create one first</option>';
 }
 
 function startQueue() {
