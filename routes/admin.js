@@ -69,7 +69,8 @@ router.get('/auth', (req, res) => {
 router.get('/seasons', requireAuth, (req, res) => {
   const db = getDb();
   const seasons = db.prepare(`
-    SELECT s.*, COUNT(DISTINCT w.id) AS week_count, COUNT(DISTINCT m.id) AS match_count,
+    SELECT s.*, COUNT(DISTINCT w.id) AS week_count,
+           COUNT(DISTINCT CASE WHEN m.synthetic=0 THEN m.id END) AS match_count,
            COUNT(DISTINCT ms.player_id) AS player_count
     FROM seasons s
     LEFT JOIN weeks w ON w.season_id = s.id
@@ -190,7 +191,7 @@ router.post('/seasons/:id/summary', requireAuth, async (req, res) => {
   }
 
   const weekLines = allWeeks.map(w => {
-    const mc = db.prepare('SELECT COUNT(*) AS cnt FROM matches WHERE week_id = ?').get(w.id);
+    const mc = db.prepare('SELECT COUNT(*) AS cnt FROM matches WHERE week_id = ? AND synthetic=0').get(w.id);
     return `- Week ${w.week_number}${w.week_date ? ` (${w.week_date})` : ''}: ${mc.cnt} matches`;
   }).join('\n');
 
@@ -349,7 +350,7 @@ router.post('/weeks/:id/summary', requireAuth, async (req, res) => {
   if (!process.env.ANTHROPIC_API_KEY)
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
 
-  const matches = db.prepare('SELECT * FROM matches WHERE week_id = ? ORDER BY match_date').all(week.id);
+  const matches = db.prepare('SELECT * FROM matches WHERE week_id = ? AND synthetic=0 ORDER BY match_date').all(week.id);
 
   // Overall player stats for the week
   const playerRows = db.prepare(`

@@ -1,0 +1,8 @@
+CTF Ladder — Todo
+=================
+
+[ ] Mobile-friendly / responsive design
+    Standings, history and public pages need better layout on small screens.
+
+[ ] Edit existing notes on Admin → Notes page
+    Currently notes can only be added or deleted, not edited inline.

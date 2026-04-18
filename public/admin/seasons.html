@@ -64,7 +64,7 @@ async function loadList() {
       <td>${esc(s.name)}</td>
       <td>${badge}${hasSummary ? ' <span class="badge badge-green" style="font-size:.7rem">AI</span>' : ''}</td>
       <td class="num">${s.week_count}</td>
-      <td class="num">${s.match_count}</td>
+      <td class="num">${s.match_count > 0 ? s.match_count : '—'}</td>
       <td>${s.created_at.split('T')[0]}</td>
       <td style="white-space:nowrap">
         ${isActive ? `<button class="btn btn-danger btn-sm" onclick="finishSeason(${s.id})">Finish Season</button>` : ''}

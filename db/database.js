@@ -53,6 +53,7 @@ function initDatabase() {
       match_date  TEXT,
       red_score   INTEGER NOT NULL DEFAULT 0,
       blue_score  INTEGER NOT NULL DEFAULT 0,
+      synthetic   INTEGER NOT NULL DEFAULT 0,
       imported_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -115,6 +116,9 @@ function initDatabase() {
   if (!seasonCols2.includes('archived'))                db.exec("ALTER TABLE seasons ADD COLUMN archived INTEGER NOT NULL DEFAULT 0");
   if (!seasonCols2.includes('ai_summary'))              db.exec("ALTER TABLE seasons ADD COLUMN ai_summary TEXT");
   if (!seasonCols2.includes('ai_summary_generated_at')) db.exec("ALTER TABLE seasons ADD COLUMN ai_summary_generated_at TEXT");
+
+  const matchCols = db.prepare("PRAGMA table_info(matches)").all().map(c => c.name);
+  if (!matchCols.includes('synthetic')) db.exec("ALTER TABLE matches ADD COLUMN synthetic INTEGER NOT NULL DEFAULT 0");
 
   const insert = db.prepare('INSERT OR IGNORE INTO scoring_settings (key, value) VALUES (?, ?)');
   const seed = db.transaction(() => {
