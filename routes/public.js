@@ -225,7 +225,7 @@ router.get('/week/:id', (req, res) => {
     return { ...r, ...s, season_wins: winners[r.player_id] || [] };
   }).sort((a, b) => b.score - a.score);
 
-  const matches = db.prepare("SELECT * FROM matches WHERE week_id = ? AND api_url NOT LIKE 'legacy://%' ORDER BY id").all(week.id);
+  const matches = db.prepare("SELECT * FROM matches WHERE week_id = ? AND api_url NOT LIKE 'legacy://%' ORDER BY match_date DESC").all(week.id);
 
   // Neighbour weeks for prev/next nav
   const allWeeks = db.prepare('SELECT id, week_number FROM weeks WHERE season_id = ? ORDER BY week_number').all(week.season_id);
