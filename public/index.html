@@ -176,7 +176,6 @@ function setView(mode) {
   viewMode = mode;
   localStorage.setItem('standingsView', mode);
   applyViewClass();
-  sortState = mode === 'points' ? { col: 'score', dir: -1 } : { col: 'total_caps', dir: -1 };
   refreshContent();
 }
 
